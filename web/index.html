@@ -29,11 +29,15 @@
 </head>
 <body>
 <h1>Treadmill Sensor <small id="conn">connecting…</small></h1>
+<div class="row" style="margin-bottom:0.75rem;align-items:center">
+  <select id="profile" style="background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:6px;padding:0.35rem 0.5rem"></select>
+  <a class="btn" href="/settings">Settings</a>
+</div>
 
 <div class="row">
   <div class="card"><div class="label">Speed</div><div class="big" id="kmh">0.00</div><div class="label"><span id="mps">0.00</span> m/s</div></div>
   <div class="card"><div class="label">Distance</div><div class="big" id="dist">0.0</div><div class="label">m</div></div>
-  <div class="card"><div class="label">State</div><div class="big" id="state">stopped</div><div class="label">uptime <span id="uptime">0</span> s</div></div>
+  <div class="card"><div class="label">State</div><div class="big" id="state">stopped</div><div class="label" id="phase"></div><div class="label">uptime <span id="uptime">0</span> s</div></div>
 </div>
 
 <h2>Revolution speed (last 200 revolutions, km/h)</h2>
@@ -44,6 +48,10 @@
 
 <h2>Mark share of revolution time (ideal dashed)</h2>
 <div class="bars" id="bars"></div>
+<div class="row" style="margin-top:0.5rem;align-items:center">
+  <button id="useMeasured" disabled>Use measured distances</button>
+  <small id="calMsg">Runs after 10 steady revolutions with the phase locked.</small>
+</div>
 
 <h2>Quality</h2>
 <div class="row">
@@ -74,6 +82,55 @@ let intervals = [];     // ms per pulse
 let lastSeq = 0;
 let marks = 3;
 let pulsesInFlight = false;
+let profiles = [];
+let activeId = null;
+let lastStatus = null;
+
+async function loadProfiles() {
+  try {
+    const d = await (await fetch('/api/profiles')).json();
+    profiles = d.profiles; activeId = d.active;
+    const sel = $('profile');
+    sel.innerHTML = '';
+    for (const p of profiles) {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = `${p.name} (${p.belt_length_m.toFixed(2)} m, ${p.marks} marks)`;
+      sel.appendChild(o);
+    }
+    sel.value = String(activeId);
+  } catch (e) { /* offline; status poll reports it */ }
+}
+
+$('profile').onchange = async () => {
+  const id = $('profile').value;
+  try {
+    await fetch(`/api/profiles/${id}/activate`, { method: 'POST' });
+    await loadProfiles();
+  } catch (e) { $('conn').textContent = 'activate failed'; }
+};
+
+function proposedDistances(s) {
+  // mark_share[m] is the interval ending at mark m; distance k runs from mark k to k+1.
+  const L = s.config.belt_length_m, n = s.config.marks_count;
+  return Array.from({ length: n }, (_, k) => s.mark_share[(k + 1) % n] * L);
+}
+
+$('useMeasured').onclick = async () => {
+  const s = lastStatus; if (!s) return;
+  const p = profiles.find(x => x.id === s.profile.id); if (!p) return;
+  const d = proposedDistances(s);
+  const lines = d.map((v, k) => `mark ${k} → ${(k + 1) % d.length}: ${p.mark_distance_m[k].toFixed(3)} → ${v.toFixed(3)} m`).join('\n');
+  if (!confirm(`Update "${p.name}" with measured distances?\n\n${lines}\n\nBelt length stays ${s.config.belt_length_m.toFixed(3)} m.`)) return;
+  const fields = { name: p.name, type: p.type, marks: p.marks };
+  d.forEach((v, k) => fields['d' + k] = v.toFixed(4));
+  try {
+    const r = await fetch(`/api/profiles/${p.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    $('calMsg').textContent = 'Saved. The phase re-locks on the next revolution.';
+    await loadProfiles();
+  } catch (e) { $('calMsg').textContent = 'Save failed: ' + e.message; }
+};
+
 
 function fitCanvas(c) {
   const dpr = window.devicePixelRatio || 1;
@@ -126,6 +183,10 @@ async function pollStatus() {
     const s = await (await fetch('/api/status')).json();
     if (s.last_seq < lastSeq) { lastSeq = 0; revSpeeds = []; intervals = []; }
     marks = s.config.marks_count;
+    lastStatus = s;
+    if (s.profile.id !== activeId) loadProfiles();
+    $('phase').textContent = s.running ? (s.phase_locked ? 'phase locked' : 'locking phase…') : '';
+    $('useMeasured').disabled = !(s.stats_revolutions >= 10 && s.phase_locked);
     $('conn').textContent = '';
     $('kmh').textContent = s.speed_kmh.toFixed(2);
     $('mps').textContent = s.speed_mps.toFixed(2);
@@ -194,6 +255,7 @@ $('reset').onclick = async () => {
 
 setInterval(pollStatus, 500);
 setInterval(pollPulses, 1000);
+loadProfiles();
 pollStatus();
 pollPulses();
 </script>
