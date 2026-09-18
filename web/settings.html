@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treadmill Sensor – Settings</title>
+<style>
+  :root { --bg: #111; --card: #1e1e1e; --fg: #eee; --muted: #999; --accent: #4fc3f7; --warn: #ffb74d; --bad: #ef5350; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 1rem; background: var(--bg); color: var(--fg); }
+  h1 { font-size: 1.3rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 0.9rem; color: var(--muted); margin: 1.25rem 0 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  a { color: var(--accent); }
+  .card { background: var(--card); padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.6rem; }
+  .card.active { outline: 2px solid var(--accent); }
+  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .grow { flex: 1; }
+  .label { color: var(--muted); font-size: 0.75rem; }
+  .badge { background: var(--accent); color: #000; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px; margin-left: 0.4rem; }
+  button { background: #333; color: var(--fg); border: 0; padding: 0.45rem 0.9rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  button.primary { background: #1e5a7a; }
+  button.danger { background: #5a2323; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  input, select { background: #2a2a2a; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
+  .field { margin-bottom: 0.6rem; }
+  .dist { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.5rem; }
+  .msg { min-height: 1.2rem; font-size: 0.85rem; }
+  .msg.err { color: var(--bad); }
+  .msg.ok { color: #a5d6a7; }
+  .warn { color: var(--warn); font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>Settings <small><a href="/">← back to sensor</a></small></h1>
+
+<h2>Treadmill profiles</h2>
+<div id="profiles"></div>
+<div class="row"><button id="add" class="primary">Add profile</button><span class="msg" id="pmsg"></span></div>
+
+<div class="card" id="editor" hidden>
+  <div class="label" id="editorTitle">Edit profile</div>
+  <div class="field"><div class="label">Name</div><input id="fName" maxlength="23" placeholder="e.g. Gym treadmill A"></div>
+  <div class="row">
+    <div class="field grow"><div class="label">Type</div>
+      <select id="fType"><option value="belt">Belt (painted marks)</option><option value="slats">Slats (not supported yet)</option></select></div>
+    <div class="field grow"><div class="label">Marks per revolution</div><input id="fMarks" type="number" min="1" max="8" step="1" value="3"></div>
+  </div>
+  <div class="label">Distance from each mark to the next (m)</div>
+  <div class="dist" id="fDist"></div>
+  <div class="label" style="margin-top:0.4rem">Belt length: <span id="fSum">–</span> m</div>
+  <div class="row" style="margin-top:0.6rem"><button id="save" class="primary">Save</button><button id="cancel">Cancel</button><span class="msg" id="emsg"></span></div>
+</div>
+
+<h2>Wi-Fi access point</h2>
+<div class="card">
+  <div class="field"><div class="label">Network name (SSID)</div><input id="wSsid" maxlength="32"></div>
+  <div class="row">
+    <div class="field grow"><div class="label">Password (8–63 characters)</div><input id="wPass" type="password" maxlength="63"></div>
+    <div class="field grow"><div class="label">Confirm password</div><input id="wPass2" type="password" maxlength="63"></div>
+  </div>
+  <div class="warn">Saving restarts the sensor's network. Reconnect your phone or laptop to the new name afterwards. If you forget the password, hold BOOT while resetting the sensor to restore the defaults.</div>
+  <div class="row" style="margin-top:0.6rem"><button id="wSave" class="primary">Save Wi-Fi settings</button><span class="msg" id="wmsg"></span></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let profiles = [];
+let active = 0;
+let editingId = null;
+
+function msg(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); }
+
+async function post(url, fields) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+async function loadProfiles() {
+  const d = await (await fetch('/api/profiles')).json();
+  profiles = d.profiles; active = d.active;
+  const el = $('profiles');
+  el.innerHTML = '';
+  for (const p of profiles) {
+    const c = document.createElement('div');
+    c.className = 'card' + (p.id === active ? ' active' : '');
+    c.innerHTML = `<div class="row"><div class="grow"><strong>${esc(p.name)}</strong>${p.id === active ? '<span class="badge">ACTIVE</span>' : ''}
+      <div class="label">${p.type} · ${p.marks} mark${p.marks > 1 ? 's' : ''} · belt ${p.belt_length_m.toFixed(3)} m · ${p.mark_distance_m.map(v => v.toFixed(3)).join(' / ')}</div></div>
+      <button data-act="edit" data-id="${p.id}">Edit</button>
+      <button data-act="activate" data-id="${p.id}" ${p.id === active ? 'disabled' : ''}>Activate</button>
+      <button data-act="delete" data-id="${p.id}" class="danger" ${p.id === active ? 'disabled' : ''}>Delete</button></div>`;
+    el.appendChild(c);
+  }
+  $('add').disabled = profiles.length >= 8;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function renderDist(values) {
+  const n = Math.max(1, Math.min(8, parseInt($('fMarks').value) || 1));
+  const box = $('fDist');
+  box.innerHTML = '';
+  for (let k = 0; k < n; k++) {
+    const i = document.createElement('input');
+    i.type = 'number'; i.step = '0.001'; i.min = '0.05'; i.max = '10'; i.id = 'd' + k;
+    i.value = values && values[k] != null ? values[k].toFixed(3) : '';
+    i.placeholder = 'mark ' + k + ' → ' + ((k + 1) % n);
+    i.oninput = updateSum;
+    box.appendChild(i);
+  }
+  updateSum();
+}
+
+function updateSum() {
+  let sum = 0;
+  document.querySelectorAll('#fDist input').forEach(i => sum += parseFloat(i.value) || 0);
+  $('fSum').textContent = sum.toFixed(3);
+}
+
+function openEditor(p, id) {
+  editingId = id;
+  $('editorTitle').textContent = p ? `Edit profile ${id}` : `New profile ${id}`;
+  $('fName').value = p ? p.name : '';
+  $('fType').value = p ? p.type : 'belt';
+  $('fMarks').value = p ? p.marks : 3;
+  renderDist(p ? p.mark_distance_m : null);
+  msg($('emsg'), '', true);
+  $('editor').hidden = false;
+  $('fName').focus();
+}
+
+$('fMarks').onchange = () => {
+  const old = [...document.querySelectorAll('#fDist input')].map(i => parseFloat(i.value));
+  renderDist(old);
+};
+
+$('profiles').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = parseInt(b.dataset.id);
+  const p = profiles.find(x => x.id === id);
+  try {
+    if (b.dataset.act === 'edit') openEditor(p, id);
+    if (b.dataset.act === 'activate') { await post(`/api/profiles/${id}/activate`); msg($('pmsg'), `Activated ${p.name}`, true); await loadProfiles(); }
+    if (b.dataset.act === 'delete') { if (!confirm(`Delete profile "${p.name}"?`)) return; await post(`/api/profiles/${id}/delete`); msg($('pmsg'), 'Deleted', true); await loadProfiles(); }
+  } catch (err) { msg($('pmsg'), err.message, false); }
+};
+
+$('add').onclick = () => {
+  const used = new Set(profiles.map(p => p.id));
+  let id = 0; while (used.has(id) && id < 8) id++;
+  if (id >= 8) { msg($('pmsg'), 'All 8 slots are used', false); return; }
+  openEditor(null, id);
+};
+
+$('cancel').onclick = () => { $('editor').hidden = true; editingId = null; };
+
+$('save').onclick = async () => {
+  const fields = { name: $('fName').value.trim(), type: $('fType').value, marks: $('fMarks').value };
+  document.querySelectorAll('#fDist input').forEach(i => fields[i.id] = i.value);
+  try {
+    await post(`/api/profiles/${editingId}`, fields);
+    $('editor').hidden = true; editingId = null;
+    msg($('pmsg'), 'Saved', true);
+    await loadProfiles();
+  } catch (err) { msg($('emsg'), err.message, false); }
+};
+
+async function loadSettings() {
+  try { const s = await (await fetch('/api/settings')).json(); $('wSsid').value = s.ap_ssid; } catch (e) { msg($('wmsg'), 'offline', false); }
+}
+
+$('wSave').onclick = async () => {
+  const ssid = $('wSsid').value.trim(), p1 = $('wPass').value, p2 = $('wPass2').value;
+  if (p1 !== p2) { msg($('wmsg'), 'Passwords do not match', false); return; }
+  if (!confirm(`Change the sensor's network to "${ssid}"? You will have to reconnect.`)) return;
+  try {
+    await post('/api/settings/wifi', { ssid, password: p1 });
+    msg($('wmsg'), 'Saved. The network restarts now – reconnect to ' + ssid + '.', true);
+    $('wPass').value = ''; $('wPass2').value = '';
+  } catch (err) { msg($('wmsg'), err.message, false); }
+};
+
+loadProfiles().catch(() => msg($('pmsg'), 'offline', false));
+loadSettings();
+</script>
+</body>
+</html>

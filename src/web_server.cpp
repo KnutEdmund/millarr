@@ -14,7 +14,7 @@
 #include "profile.h"
 #include "profile_store.h"
 #include "pulse_isr.h"
-#include "web_page.h"
+#include "web_pages.h"
 #include "wifi_ap.h"
 
 using speed_core::EngineStatus;
@@ -47,8 +47,10 @@ bool parseSlot(uint8_t& slot) {
 }
 
 void handleRoot() {
-  server.send_P(200, "text/html; charset=utf-8", INDEX_HTML);
+  server.send_P(200, "text/html; charset=utf-8", PAGE_INDEX);
 }
+
+void handleSettingsPage() { server.send_P(200, "text/html; charset=utf-8", PAGE_SETTINGS); }
 
 void handleStatus() {
   char buf[1024];
@@ -242,6 +244,7 @@ void handleWifiSave() {
 void begin(SpeedEngine& engine) {
   engine_ = &engine;
   server.on("/", HTTP_GET, handleRoot);
+  server.on("/settings", HTTP_GET, handleSettingsPage);
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/pulses.json", HTTP_GET, handlePulsesJson);
   server.on("/api/pulses.csv", HTTP_GET, handlePulsesCsv);
