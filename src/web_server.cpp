@@ -6,6 +6,7 @@
 
 #include <cstring>
 
+#include "adc_probe.h"
 #include "format.h"
 #include "pulse_isr.h"
 #include "web_page.h"
@@ -85,6 +86,32 @@ void handleNotFound() {
   server.send(404, "text/plain", "not found");
 }
 
+adc_probe::Capture capture_buf;  // 800 bytes, static to keep it off the stack
+
+void handleSignal() {
+  adc_probe::capture(capture_buf);
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  char head[96];
+  snprintf(head, sizeof head, "{\"sample_rate_hz\":%lu,\"min\":%u,\"max\":%u,\"margin\":%u,\"samples\":[",
+           (unsigned long)adc_probe::kSampleRateHz, capture_buf.min, capture_buf.max,
+           capture_buf.max - capture_buf.min);
+  server.sendContent(head);
+  static char chunk[1024];
+  size_t used = 0;
+  for (uint16_t i = 0; i < adc_probe::kSamples; ++i) {
+    int n = snprintf(chunk + used, sizeof chunk - used, "%s%u", i ? "," : "", capture_buf.samples[i]);
+    used += n;
+    if (used > sizeof chunk - 8) {
+      server.sendContent(chunk, used);
+      used = 0;
+    }
+  }
+  if (used) server.sendContent(chunk, used);
+  server.sendContent("]}");
+  server.sendContent("");
+}
+
 }  // namespace
 
 void begin(SpeedEngine& engine) {
@@ -94,6 +121,7 @@ void begin(SpeedEngine& engine) {
   server.on("/api/pulses.json", HTTP_GET, handlePulsesJson);
   server.on("/api/pulses.csv", HTTP_GET, handlePulsesCsv);
   server.on("/api/reset", HTTP_POST, handleReset);
+  server.on("/api/signal", HTTP_GET, handleSignal);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("http: listening on port 80");

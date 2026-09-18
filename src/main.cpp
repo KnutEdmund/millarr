@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "adc_probe.h"
 #include "config.h"
 #include "pulse_isr.h"
 #include "speed_engine.h"
@@ -23,6 +24,7 @@ void setup() {
   Serial.printf("belt=%.3fm marks=%u debounce=%luus stop=%luus\n", (double)BELT_LENGTH_M,
                 (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US, (unsigned long)STOP_TIMEOUT_US);
   pulse_isr::begin(SENSOR_DO_PIN, DEBOUNCE_US);
+  adc_probe::begin(SENSOR_AO_PIN);
 
   wifi_ap::begin(AP_SSID, AP_PASSWORD, MDNS_HOSTNAME);
   web_server::begin(engine);
