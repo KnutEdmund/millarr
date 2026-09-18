@@ -14,6 +14,10 @@ placement or firmware timing. Record results in `docs/results/` (create it) as
 
 ## 2. Belt length and mark spacing
 
+Measure the belt length once with a tape and enter it as equal distances first;
+calibration redistributes distances but keeps their sum, so the tape measurement
+anchors absolute distance.
+
 1. Create or select a profile for this treadmill on the **Settings** page.
 2. Run the treadmill at its lowest speed until the diagnostic page shows "phase
    locked" and the "Use measured distances" button enables (10 steady revolutions

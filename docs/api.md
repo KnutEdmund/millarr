@@ -34,11 +34,12 @@ is the currently active profile; saving a different slot just writes it to NVS.
 
 Errors from `/api/profiles/{id}`, in the order they are checked: `bad profile id`
 (id isn't a single digit 0–7), `name too long`, `bad type` (not `belt` or `slats`),
-`marks must be 1..8`, `missing distance` (a `d0`…`d{marks-1}` field is absent), then
-any `validate()` reason below. `/api/profiles/{id}/activate`: `bad profile id`,
-`empty profile` (no profile stored in that slot). `/api/profiles/{id}/delete`:
-`bad profile id`, `cannot delete active profile`, `empty profile`,
-`at least one profile` (refuses to delete the last remaining profile).
+`marks must be 1..8`, `missing distance` (a `d0`…`d{marks-1}` field is absent), any
+`validate()` reason below, then `save failed` (`500`, NVS write failed).
+`/api/profiles/{id}/activate`: `bad profile id`, `empty profile` (no profile stored
+in that slot). `/api/profiles/{id}/delete`: `bad profile id`,
+`cannot delete active profile`, `empty profile`, `at least one profile` (refuses to
+delete the last remaining profile), then `erase failed` (`500`, NVS write failed).
 `/api/settings/wifi`: `ssid must be 1-32 printable characters`,
 `password must be 8-63 printable characters`.
 
@@ -61,9 +62,9 @@ any `validate()` reason below. `/api/profiles/{id}/activate`: `bad profile id`,
   distance rather than the per-mark one. It becomes true once the engine has picked
   which physical mark the run started on.
 - `mark_share[m]` is the fraction of revolution time in the interval ending at mark
-  `m`, averaged over the last 10 revolutions. Ideal is `1/marks_count`. Once
-  `phase_locked` is true, index `m` names a physical mark (matching
-  `config.mark_distance_m`); before that it is still run-relative.
+  `m`, averaged over the last 10 revolutions. Ideal is `1/marks_count`. Index `m`
+  names a physical mark (matching `config.mark_distance_m`): shares are only
+  accumulated once the phase is locked.
 - `rev_speed_stddev` is over the same 10 revolutions, in m/s.
 - `profile` is the active profile's id and name.
 - `config` is the engine configuration currently in effect: the active profile's

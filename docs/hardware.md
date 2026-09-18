@@ -43,10 +43,13 @@ belt length and mark spacing live in profiles on the **Settings** page (see
 
 ## Recovering Wi-Fi settings
 
-If the access point name or password is forgotten: hold **BOOT** (GPIO0), press and
-release **EN**, and keep BOOT held for 3 s after release. The serial log prints
-`wifi settings reset (BOOT held)`, and the access point returns to the defaults in
-`include/config.h` (`AP_SSID`/`AP_PASSWORD`). Stored profiles are not affected.
+If the access point name or password is forgotten: Reset or power-cycle the sensor,
+wait for the boot log (about a second), then press and hold **BOOT** for 3 seconds
+within the first 10 seconds after boot. The serial log prints `wifi settings reset
+(BOOT held)` and the access point restarts with the defaults from
+`include/config.h`. Do **not** hold BOOT while pressing EN: that puts the ESP32 into
+flash-download mode and the firmware does not start. Stored profiles are not
+affected.
 
 Note when capturing serial output on a Mac without power-cycling the board first: a
 capture started mid-run (no BOOT/EN reset) can open with a burst of garbled old

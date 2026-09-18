@@ -11,8 +11,13 @@ Dated, append-only. Newest first.
 - **Profiles are 60-byte blobs** in NVS namespace `millarr` (one padding byte,
   always zero-initialised before save); a wrong size or version counts as an empty
   slot.
-- **BOOT button (GPIO0) held 3 s at boot resets the AP credentials.**
+- **BOOT button (GPIO0) held 3 s within 10 s after boot resets the AP credentials.**
+  A `loop()`-based watcher samples GPIO0 only after `setup()` has started, since
+  holding it low across an EN reset would put the ESP32 into UART download mode
+  and `setup()` would never run.
 - **Slat treadmills are representable** (`type=slats`) but not implemented.
+- Stats window is cleared when a restart locks a different phase than the previous
+  run, so calibration never blends alignments.
 
 ## 2026-09-18
 

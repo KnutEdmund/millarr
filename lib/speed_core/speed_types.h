@@ -53,7 +53,7 @@ struct EngineStatus {
   float speed_mps;             // rev speed of the newest pulse, or 0 when stopped
   bool running;
   bool phase_locked;           // true once the current run has completed a revolution and chosen its mark phase
-  float distance_m;            // pulses with an interval * belt_length / marks
+  float distance_m;            // accumulated distance: per-mark distance once the phase is locked, mean before
   uint32_t pulse_count;        // accepted pulses since reset
   uint32_t revolution_count;   // completed revolutions since reset
   uint32_t rejected_debounce;  // pulses rejected by the engine's debounce rule
