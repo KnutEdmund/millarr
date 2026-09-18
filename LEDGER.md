@@ -11,7 +11,13 @@ Dated, append-only. Newest first.
   belt phase after a stop is unknown and per-mark stats must be consistent within a run.
 - **Distance counts intervals**, not pulses: the first pulse after a stop has no known
   travel.
-- **Platform pinned** to the `espressif32` version resolved on first build.
+- **Platform pinned** to `espressif32@7.1.3`, the version resolved on first build.
+- **Stop is latched by `SpeedEngine::tick()` from `loop()`**, so a `micros()` wrap
+  during idle cannot resurrect a stale running state.
+- **`mark_share` is a time-weighted mean** (sum of per-mark intervals over sum of
+  revolution time across the window), not the mean of per-revolution ratios the
+  spec describes; identical at constant speed and the better estimator under
+  acceleration.
 
 ## 2026-09-07
 

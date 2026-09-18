@@ -11,13 +11,17 @@ Base URL: `http://192.168.4.1` (or `http://treadmill.local`) on the sensor's acc
 | GET | `/api/signal` | 200 ms ADC capture of the sensor's analog output |
 | POST | `/api/reset` | Clears log, distance and counters; `{"ok":true}` |
 
+Note on `/api/pulses.csv`: sending the whole log blocks the sensor's main loop for up
+to about a second; the interrupt ring absorbs roughly 60 pulses meanwhile, so
+download while the belt is stopped, or check `isr_dropped` in `/api/status` afterwards.
+
 ## `/api/status`
 
 ```json
 {"speed_mps":2.778,"speed_kmh":10.000,"running":true,"distance_m":123.4,
  "pulse_count":131,"revolution_count":43,"rejected_debounce":2,"isr_dropped":0,
  "mark_share":[0.333,0.334,0.333],"rev_speed_stddev":0.0120,"stats_revolutions":10,
- "log_size":131,"log_overwritten":0,"last_seq":131,"uptime_s":99,
+ "log_size":131,"log_capacity":2048,"log_overwritten":0,"last_seq":131,"uptime_s":99,
  "config":{"belt_length_m":2.820,"marks_count":3,"debounce_us":50000,"stop_timeout_us":3000000}}
 ```
 
@@ -37,8 +41,6 @@ CSV columns are identical: `seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_m
 - `t_us` wraps every ≈ 71.6 minutes; compute differences with unsigned 32-bit arithmetic.
 - `interval_us` is 0 for the first pulse of a run (after boot, reset or a stop).
 - `mark` is the pulse index since the last restart modulo `marks_count`.
-
-Sending the whole log blocks the sensor's main loop for up to about a second; the interrupt ring absorbs roughly 60 pulses meanwhile, so download while the belt is stopped, or check `isr_dropped` in `/api/status` afterwards.
 
 ## `/api/signal`
 

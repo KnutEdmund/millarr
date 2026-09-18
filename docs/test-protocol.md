@@ -36,6 +36,8 @@ Both are real effects, not sensor error.
 ## Acceptance for Milestone 2
 
 - Std dev of revolution speed < 1.5 % at constant speed, no runner.
-- Zero dropped pulses across all steps.
+- Zero dropped pulses across all steps. A dropped or missed pulse shifts the
+  run-relative mark index permanently, so every later revolution boundary lands
+  one mark late and the affected revolution reads roughly one mark-distance short.
 - Mark-share deviations documented (they will be used for per-mark calibration).
 - Sensor mean within 3 % of console at every step, or the offset is explained.

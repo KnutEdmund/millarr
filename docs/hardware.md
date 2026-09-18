@@ -28,7 +28,9 @@ cable powers the board; do not feed 5 V from both at once.
 - Fix it so it cannot vibrate: a small bracket screwed to the motor cover works.
 - Use the web page's "Capture signal" to see belt vs. mark contrast, then turn the
   module's potentiometer until DO switches cleanly inside that margin and the
-  onboard LED blinks once per mark. With nothing connected, the analog input reads 0; 3.3 V on GPIO34 reads 4095, which is a quick way to confirm the ADC path is alive.
+  onboard LED blinks once per mark.
+- With nothing connected, the analog input reads 0; 3.3 V on GPIO34 reads 4095,
+  which is a quick way to confirm the ADC path is alive.
 
 ## Belt length
 
