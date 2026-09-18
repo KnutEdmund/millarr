@@ -5,46 +5,191 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Treadmill Sensor</title>
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; margin: 1rem; background: #111; color: #eee; }
-  .big { font-size: 3rem; font-weight: 600; }
-  .row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-  .card { background: #1e1e1e; padding: 0.75rem 1rem; border-radius: 8px; min-width: 8rem; }
-  .label { color: #999; font-size: 0.8rem; }
-  button, a.btn { background: #333; color: #eee; border: 0; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; cursor: pointer; }
-  pre { background: #1e1e1e; padding: 0.5rem; overflow-x: auto; }
+  :root { --bg: #111; --card: #1e1e1e; --fg: #eee; --muted: #999; --accent: #4fc3f7; --warn: #ffb74d; --bad: #ef5350; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 1rem; background: var(--bg); color: var(--fg); }
+  h1 { font-size: 1.3rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 0.9rem; color: var(--muted); margin: 1.25rem 0 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .card { background: var(--card); padding: 0.6rem 0.9rem; border-radius: 8px; min-width: 7rem; flex: 1; }
+  .label { color: var(--muted); font-size: 0.75rem; }
+  .big { font-size: 2.4rem; font-weight: 600; line-height: 1.1; }
+  .val { font-size: 1.2rem; font-weight: 600; }
+  .bad { color: var(--bad); }
+  .warn { color: var(--warn); }
+  canvas { width: 100%; height: 120px; background: var(--card); border-radius: 8px; display: block; }
+  .bars { display: flex; gap: 0.5rem; align-items: flex-end; height: 120px; background: var(--card); border-radius: 8px; padding: 0.5rem; position: relative; }
+  .bar { flex: 1; background: var(--accent); border-radius: 4px 4px 0 0; position: relative; min-height: 2px; }
+  .bar span { position: absolute; top: -1.2rem; left: 0; right: 0; text-align: center; font-size: 0.75rem; }
+  .ideal { position: absolute; left: 0.5rem; right: 0.5rem; border-top: 1px dashed var(--muted); pointer-events: none; }
+  button, a.btn { background: #333; color: var(--fg); border: 0; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; cursor: pointer; font-size: 0.9rem; }
+  button.danger { background: #5a2323; }
+  .actions { margin-top: 1rem; }
+  small { color: var(--muted); }
 </style>
 </head>
 <body>
-<h1>Treadmill Sensor</h1>
+<h1>Treadmill Sensor <small id="conn">connecting…</small></h1>
+
 <div class="row">
-  <div class="card"><div class="label">Speed</div><div class="big" id="kmh">0.00</div><div class="label">km/h</div></div>
+  <div class="card"><div class="label">Speed</div><div class="big" id="kmh">0.00</div><div class="label"><span id="mps">0.00</span> m/s</div></div>
   <div class="card"><div class="label">Distance</div><div class="big" id="dist">0.0</div><div class="label">m</div></div>
-  <div class="card"><div class="label">State</div><div class="big" id="state">stopped</div></div>
+  <div class="card"><div class="label">State</div><div class="big" id="state">stopped</div><div class="label">uptime <span id="uptime">0</span> s</div></div>
 </div>
+
+<h2>Revolution speed (last 200 revolutions, km/h)</h2>
+<canvas id="speedChart"></canvas>
+
+<h2>Pulse intervals (last 200 pulses, ms)</h2>
+<canvas id="intervalChart"></canvas>
+
+<h2>Mark share of revolution time (ideal dashed)</h2>
+<div class="bars" id="bars"></div>
+
+<h2>Quality</h2>
 <div class="row">
-  <a class="btn" href="/api/pulses.csv">Download CSV</a>
-  <button id="reset">Reset</button>
+  <div class="card"><div class="label">Jitter (rev speed std dev)</div><div class="val" id="jitter">–</div></div>
+  <div class="card"><div class="label">Pulses / revolutions</div><div class="val"><span id="pulses">0</span> / <span id="revs">0</span></div></div>
+  <div class="card"><div class="label">Dropped (ISR overflow)</div><div class="val" id="dropped">0</div></div>
+  <div class="card"><div class="label">Rejected (debounce)</div><div class="val" id="rejected">0</div></div>
+  <div class="card"><div class="label">Log</div><div class="val"><span id="logsize">0</span> / <span id="logcap">?</span></div><div class="label" id="overwritten"></div></div>
 </div>
-<pre id="raw"></pre>
+
+<h2>Sensor signal (analog out, 200 ms)</h2>
+<canvas id="signalChart"></canvas>
+<div class="row" style="margin-top:0.5rem">
+  <div class="card"><div class="label">Min / max / margin (ADC counts)</div><div class="val" id="sig">–</div></div>
+  <div class="card" style="flex:0"><button id="capture">Capture signal</button></div>
+</div>
+
+<div class="actions row">
+  <a class="btn" href="/api/pulses.csv">Download CSV</a>
+  <button class="danger" id="reset">Reset log &amp; distance</button>
+</div>
+
 <script>
-async function poll() {
-  try {
-    const r = await fetch('/api/status');
-    const s = await r.json();
-    document.getElementById('kmh').textContent = s.speed_kmh.toFixed(2);
-    document.getElementById('dist').textContent = s.distance_m.toFixed(1);
-    document.getElementById('state').textContent = s.running ? 'running' : 'stopped';
-    document.getElementById('raw').textContent = JSON.stringify(s, null, 1);
-  } catch (e) {
-    document.getElementById('state').textContent = 'offline';
+const $ = id => document.getElementById(id);
+const MAX_POINTS = 200;
+let revSpeeds = [];     // km/h per revolution-completing pulse
+let intervals = [];     // ms per pulse
+let lastSeq = 0;
+let marks = 3;
+
+function fitCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== w * dpr || c.height !== h * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
+function sparkline(canvas, data, color, unitFmt) {
+  const { ctx, w, h } = fitCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  if (data.length < 2) return;
+  const pad = 6;
+  let lo = Math.min(...data), hi = Math.max(...data);
+  if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
+  const x = i => pad + (i / (data.length - 1)) * (w - 2 * pad);
+  const y = v => h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+  data.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+  ctx.stroke();
+  ctx.fillStyle = '#999'; ctx.font = '11px system-ui';
+  ctx.fillText(unitFmt(hi), pad, pad + 10);
+  ctx.fillText(unitFmt(lo), pad, h - pad);
+}
+
+function renderBars(share) {
+  const el = $('bars');
+  el.innerHTML = '';
+  const ideal = 1 / marks;
+  const scale = 100 / (ideal * 1.5);   // ideal sits at 2/3 height
+  const line = document.createElement('div');
+  line.className = 'ideal';
+  line.style.bottom = `calc(0.5rem + ${(ideal * scale).toFixed(1)}%)`;
+  el.appendChild(line);
+  for (let m = 0; m < marks; m++) {
+    const v = share[m] || 0;
+    const b = document.createElement('div');
+    b.className = 'bar';
+    b.style.height = Math.min(100, v * scale) + '%';
+    const dev = ((v - ideal) / ideal * 100);
+    b.innerHTML = `<span>${(v * 100).toFixed(1)}% <small>(${dev >= 0 ? '+' : ''}${dev.toFixed(1)}%)</small></span>`;
+    el.appendChild(b);
   }
 }
-document.getElementById('reset').onclick = async () => {
-  if (!confirm('Reset log and distance?')) return;
-  await fetch('/api/reset', { method: 'POST' });
+
+async function pollStatus() {
+  try {
+    const s = await (await fetch('/api/status')).json();
+    marks = s.config.marks_count;
+    $('conn').textContent = '';
+    $('kmh').textContent = s.speed_kmh.toFixed(2);
+    $('mps').textContent = s.speed_mps.toFixed(2);
+    $('dist').textContent = s.distance_m.toFixed(1);
+    $('state').textContent = s.running ? 'running' : 'stopped';
+    $('uptime').textContent = s.uptime_s;
+    $('jitter').textContent = s.stats_revolutions >= 2
+      ? `${(s.rev_speed_stddev * 3.6).toFixed(3)} km/h (${s.speed_mps > 0 ? (100 * s.rev_speed_stddev / s.speed_mps).toFixed(2) : '–'} %)`
+      : '–';
+    $('pulses').textContent = s.pulse_count;
+    $('revs').textContent = s.revolution_count;
+    $('dropped').textContent = s.isr_dropped;
+    $('dropped').className = s.isr_dropped ? 'val bad' : 'val';
+    $('rejected').textContent = s.rejected_debounce;
+    $('logsize').textContent = s.log_size;
+    $('overwritten').textContent = s.log_overwritten ? `${s.log_overwritten} oldest records overwritten` : '';
+    $('overwritten').className = s.log_overwritten ? 'label warn' : 'label';
+    renderBars(s.mark_share);
+  } catch (e) {
+    $('conn').textContent = 'offline';
+  }
+}
+
+async function pollPulses() {
+  try {
+    const recs = await (await fetch(`/api/pulses.json?since=${lastSeq}`)).json();
+    for (const r of recs) {
+      lastSeq = Math.max(lastSeq, r.seq);
+      if (r.interval_us > 0) intervals.push(r.interval_us / 1000);
+      if (r.rev_speed_mps > 0 && r.mark === 0) revSpeeds.push(r.rev_speed_mps * 3.6);
+    }
+    if (recs.length === 0 && lastSeq > 0) {
+      // Detect a reset: status last_seq lower than ours.
+      const s = await (await fetch('/api/status')).json();
+      if (s.last_seq < lastSeq) { lastSeq = 0; revSpeeds = []; intervals = []; }
+    }
+    intervals = intervals.slice(-MAX_POINTS);
+    revSpeeds = revSpeeds.slice(-MAX_POINTS);
+    sparkline($('speedChart'), revSpeeds, '#4fc3f7', v => v.toFixed(2) + ' km/h');
+    sparkline($('intervalChart'), intervals, '#a5d6a7', v => v.toFixed(0) + ' ms');
+  } catch (e) { /* offline; status poll reports it */ }
+}
+
+$('capture').onclick = async () => {
+  $('capture').disabled = true;
+  try {
+    const d = await (await fetch('/api/signal')).json();
+    $('sig').textContent = `${d.min} / ${d.max} / ${d.margin}`;
+    sparkline($('signalChart'), d.samples, '#ffb74d', v => String(v));
+  } catch (e) {
+    $('sig').textContent = 'capture failed';
+  }
+  $('capture').disabled = false;
 };
-setInterval(poll, 500);
-poll();
+
+$('reset').onclick = async () => {
+  if (!confirm('Reset the pulse log and distance?')) return;
+  await fetch('/api/reset', { method: 'POST' });
+  lastSeq = 0; revSpeeds = []; intervals = [];
+};
+
+$('logcap').textContent = '2048';
+setInterval(pollStatus, 500);
+setInterval(pollPulses, 1000);
+pollStatus();
+pollPulses();
 </script>
 </body>
 </html>
