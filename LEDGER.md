@@ -2,6 +2,18 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-18 (profiles)
+
+- **Per-mark distances replace equal spacing**; belt length is always the sum.
+- **Phase is locked after the first revolution of each run** by choosing the
+  distance rotation with the most uniform implied speed; ties pick shift 0.
+- **Writes to the API are form-encoded** so no JSON parser is needed on the device.
+- **Profiles are 60-byte blobs** in NVS namespace `millarr` (one padding byte,
+  always zero-initialised before save); a wrong size or version counts as an empty
+  slot.
+- **BOOT button (GPIO0) held 3 s at boot resets the AP credentials.**
+- **Slat treadmills are representable** (`type=slats`) but not implemented.
+
 ## 2026-09-18
 
 - **Log capacity 2048 records** (not 4096 as in the spec). A record is 24 bytes; 4096

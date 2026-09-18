@@ -14,9 +14,13 @@ placement or firmware timing. Record results in `docs/results/` (create it) as
 
 ## 2. Belt length and mark spacing
 
-1. Measure belt length with a tape; set `BELT_LENGTH_M`.
-2. Run the treadmill at the lowest speed for 2 minutes. Read the mark-share bars.
-   Record each mark's deviation from 33.3 %.
+1. Create or select a profile for this treadmill on the **Settings** page.
+2. Run the treadmill at its lowest speed until the diagnostic page shows "phase
+   locked" and the "Use measured distances" button enables (10 steady revolutions
+   with the phase locked). Click it and accept the proposed distances.
+3. Record the saved per-mark distances from `/api/profiles`.
+4. Repeat once more from a fresh run. The second set of distances must agree with
+   the first within 1 %.
 
 ## 3. Treadmill, no runner
 

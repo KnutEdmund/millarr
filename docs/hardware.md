@@ -36,4 +36,21 @@ cable powers the board; do not feed 5 V from both at once.
 
 Measure once with a tape (typical 2.7–3.0 m). Set `BELT_LENGTH_M` in
 `include/config.h`. Cross-check: walk the belt by hand and count revolutions on the
-web page over a marked distance.
+web page over a marked distance. `BELT_LENGTH_M`/`MARKS_COUNT` only seed the
+built-in default profile the first time the device boots; after that, per-treadmill
+belt length and mark spacing live in profiles on the **Settings** page (see
+`docs/api.md`), not in `config.h`.
+
+## Recovering Wi-Fi settings
+
+If the access point name or password is forgotten: hold **BOOT** (GPIO0), press and
+release **EN**, and keep BOOT held for 3 s after release. The serial log prints
+`wifi settings reset (BOOT held)`, and the access point returns to the defaults in
+`include/config.h` (`AP_SSID`/`AP_PASSWORD`). Stored profiles are not affected.
+
+Note when capturing serial output on a Mac without power-cycling the board first: a
+capture started mid-run (no BOOT/EN reset) can open with a burst of garbled old
+status lines before settling into clean output — a `pio device monitor` or
+`scripts/serial_capture.py` artifact of attaching to an already-running UART, not a
+firmware fault. Reset the board (or start the capture before powering it) if a clean
+log from boot is needed.
