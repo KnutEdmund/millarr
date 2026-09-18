@@ -123,6 +123,7 @@ function renderBars(share) {
 async function pollStatus() {
   try {
     const s = await (await fetch('/api/status')).json();
+    if (s.last_seq < lastSeq) { lastSeq = 0; revSpeeds = []; intervals = []; }
     marks = s.config.marks_count;
     $('conn').textContent = '';
     $('kmh').textContent = s.speed_kmh.toFixed(2);
@@ -154,11 +155,6 @@ async function pollPulses() {
       lastSeq = Math.max(lastSeq, r.seq);
       if (r.interval_us > 0) intervals.push(r.interval_us / 1000);
       if (r.rev_speed_mps > 0 && r.mark === 0) revSpeeds.push(r.rev_speed_mps * 3.6);
-    }
-    if (recs.length === 0 && lastSeq > 0) {
-      // Detect a reset: status last_seq lower than ours.
-      const s = await (await fetch('/api/status')).json();
-      if (s.last_seq < lastSeq) { lastSeq = 0; revSpeeds = []; intervals = []; }
     }
     intervals = intervals.slice(-MAX_POINTS);
     revSpeeds = revSpeeds.slice(-MAX_POINTS);
