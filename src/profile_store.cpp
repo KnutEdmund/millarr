@@ -23,6 +23,7 @@ const char* slotKey(uint8_t slot) {
 bool load(uint8_t slot, Profile& out) {
   if (slot >= MAX_PROFILES) return false;
   const char* key = slotKey(slot);
+  if (!prefs.isKey(key)) return false;
   if (prefs.getBytesLength(key) != sizeof(Profile)) return false;
   prefs.getBytes(key, &out, sizeof out);
   return speed_core::validate(out) == nullptr;
