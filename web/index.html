@@ -17,7 +17,7 @@
   .bad { color: var(--bad); }
   .warn { color: var(--warn); }
   canvas { width: 100%; height: 120px; background: var(--card); border-radius: 8px; display: block; }
-  .bars { display: flex; gap: 0.5rem; align-items: flex-end; height: 120px; background: var(--card); border-radius: 8px; padding: 0.5rem; position: relative; }
+  .bars { display: flex; gap: 0.5rem; align-items: flex-end; height: 120px; background: var(--card); border-radius: 8px; padding: 0 0.5rem; position: relative; }
   .bar { flex: 1; background: var(--accent); border-radius: 4px 4px 0 0; position: relative; min-height: 2px; }
   .bar span { position: absolute; top: -1.2rem; left: 0; right: 0; text-align: center; font-size: 0.75rem; }
   .ideal { position: absolute; left: 0.5rem; right: 0.5rem; border-top: 1px dashed var(--muted); pointer-events: none; }
@@ -73,6 +73,7 @@ let revSpeeds = [];     // km/h per revolution-completing pulse
 let intervals = [];     // ms per pulse
 let lastSeq = 0;
 let marks = 3;
+let pulsesInFlight = false;
 
 function fitCanvas(c) {
   const dpr = window.devicePixelRatio || 1;
@@ -107,7 +108,7 @@ function renderBars(share) {
   const scale = 100 / (ideal * 1.5);   // ideal sits at 2/3 height
   const line = document.createElement('div');
   line.className = 'ideal';
-  line.style.bottom = `calc(0.5rem + ${(ideal * scale).toFixed(1)}%)`;
+  line.style.bottom = (ideal * scale).toFixed(1) + '%';
   el.appendChild(line);
   for (let m = 0; m < marks; m++) {
     const v = share[m] || 0;
@@ -140,6 +141,7 @@ async function pollStatus() {
     $('dropped').className = s.isr_dropped ? 'val bad' : 'val';
     $('rejected').textContent = s.rejected_debounce;
     $('logsize').textContent = s.log_size;
+    $('logcap').textContent = s.log_capacity;
     $('overwritten').textContent = s.log_overwritten ? `${s.log_overwritten} oldest records overwritten` : '';
     $('overwritten').className = s.log_overwritten ? 'label warn' : 'label';
     renderBars(s.mark_share);
@@ -149,6 +151,8 @@ async function pollStatus() {
 }
 
 async function pollPulses() {
+  if (pulsesInFlight) return;
+  pulsesInFlight = true;
   try {
     const recs = await (await fetch(`/api/pulses.json?since=${lastSeq}`)).json();
     for (const r of recs) {
@@ -160,7 +164,10 @@ async function pollPulses() {
     revSpeeds = revSpeeds.slice(-MAX_POINTS);
     sparkline($('speedChart'), revSpeeds, '#4fc3f7', v => v.toFixed(2) + ' km/h');
     sparkline($('intervalChart'), intervals, '#a5d6a7', v => v.toFixed(0) + ' ms');
-  } catch (e) { /* offline; status poll reports it */ }
+  } catch (e) { /* offline; status poll reports it */
+  } finally {
+    pulsesInFlight = false;
+  }
 }
 
 $('capture').onclick = async () => {
@@ -177,11 +184,14 @@ $('capture').onclick = async () => {
 
 $('reset').onclick = async () => {
   if (!confirm('Reset the pulse log and distance?')) return;
-  await fetch('/api/reset', { method: 'POST' });
-  lastSeq = 0; revSpeeds = []; intervals = [];
+  try {
+    await fetch('/api/reset', { method: 'POST' });
+    lastSeq = 0; revSpeeds = []; intervals = [];
+  } catch (e) {
+    $('conn').textContent = 'reset failed';
+  }
 };
 
-$('logcap').textContent = '2048';
 setInterval(pollStatus, 500);
 setInterval(pollPulses, 1000);
 pollStatus();
