@@ -28,11 +28,11 @@ void handleRoot() {
 }
 
 void handleStatus() {
-  char buf[768];
+  char buf[1024];
   EngineStatus s = engine_->status(micros());
   s.rejected_debounce += pulse_isr::rejected();
-  int n = speed_core::formatStatusJson(s, engine_->config(), pulse_isr::dropped(), millis() / 1000,
-                                       buf, sizeof buf);
+  speed_core::StatusExtras x{pulse_isr::dropped(), millis() / 1000, 0, "default"};
+  int n = speed_core::formatStatusJson(s, engine_->config(), x, buf, sizeof buf);
   if (n < 0 || n >= (int)sizeof buf) {
     Serial.println("status json truncated");
     server.send(500, "text/plain", "status too large");

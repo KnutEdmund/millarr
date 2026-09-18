@@ -320,6 +320,7 @@ void test_json_status_contains_all_fields() {
   EngineStatus s{};
   s.speed_mps = 2.5f;
   s.running = true;
+  s.phase_locked = true;
   s.distance_m = 12.34f;
   s.pulse_count = 13;
   s.revolution_count = 4;
@@ -334,16 +335,39 @@ void test_json_status_contains_all_fields() {
   s.log_overwritten = 0;
   s.last_seq = 13;
   EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
-  char buf[768];
-  int n = formatStatusJson(s, c, 2, 99, buf, sizeof buf);
+  StatusExtras x{2, 99, 1, "Gym A"};
+  char buf[1024];
+  int n = formatStatusJson(s, c, x, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
   TEST_ASSERT_EQUAL_STRING(
-      "{\"speed_mps\":2.500,\"speed_kmh\":9.000,\"running\":true,\"distance_m\":12.340,"
+      "{\"speed_mps\":2.500,\"speed_kmh\":9.000,\"running\":true,\"phase_locked\":true,\"distance_m\":12.340,"
       "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"isr_dropped\":2,"
       "\"mark_share\":[0.330,0.330,0.340],\"rev_speed_stddev\":0.0120,\"stats_revolutions\":4,"
       "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
-      "\"config\":{\"belt_length_m\":2.820,\"marks_count\":3,\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
+      "\"profile\":{\"id\":1,\"name\":\"Gym A\"},"
+      "\"config\":{\"marks_count\":3,\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820,"
+      "\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
       buf);
+}
+
+void test_json_profile() {
+  Profile p = makeDefaultProfile("Home treadmill", 2.82f, 3);
+  char buf[256];
+  int n = formatProfileJson(p, 0, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"id\":0,\"name\":\"Home treadmill\",\"type\":\"belt\",\"marks\":3,"
+      "\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820}",
+      buf);
+}
+
+void test_json_status_truncation_is_reported() {
+  EngineStatus s{};
+  EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
+  StatusExtras x{0, 0, 0, "x"};
+  char buf[64];
+  int n = formatStatusJson(s, c, x, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n >= (int)sizeof buf);   // caller must treat this as truncated
 }
 
 // --- Per-mark distances and phase lock ---
@@ -535,5 +559,7 @@ int main(int, char**) {
   RUN_TEST(test_csv_record_line);
   RUN_TEST(test_json_record);
   RUN_TEST(test_json_status_contains_all_fields);
+  RUN_TEST(test_json_profile);
+  RUN_TEST(test_json_status_truncation_is_reported);
   return UNITY_END();
 }
