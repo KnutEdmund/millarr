@@ -85,8 +85,13 @@ let pulsesInFlight = false;
 let profiles = [];
 let activeId = null;
 let lastStatus = null;
+let profilesInFlight = false;
+let lastProfilesAttempt = 0;
 
 async function loadProfiles() {
+  if (profilesInFlight) return;
+  profilesInFlight = true;
+  lastProfilesAttempt = Date.now();
   try {
     const d = await (await fetch('/api/profiles')).json();
     profiles = d.profiles; activeId = d.active;
@@ -98,7 +103,10 @@ async function loadProfiles() {
       sel.appendChild(o);
     }
     sel.value = String(activeId);
-  } catch (e) { /* offline; status poll reports it */ }
+  } catch (e) { /* offline; status poll reports it */
+  } finally {
+    profilesInFlight = false;
+  }
 }
 
 $('profile').onchange = async () => {
@@ -117,11 +125,12 @@ function proposedDistances(s) {
 
 $('useMeasured').onclick = async () => {
   const s = lastStatus; if (!s) return;
+  await loadProfiles();
   const p = profiles.find(x => x.id === s.profile.id); if (!p) return;
   const d = proposedDistances(s);
   const lines = d.map((v, k) => `mark ${k} → ${(k + 1) % d.length}: ${p.mark_distance_m[k].toFixed(3)} → ${v.toFixed(3)} m`).join('\n');
   if (!confirm(`Update "${p.name}" with measured distances?\n\n${lines}\n\nBelt length stays ${s.config.belt_length_m.toFixed(3)} m.`)) return;
-  const fields = { name: p.name, type: p.type, marks: p.marks };
+  const fields = { name: p.name, type: p.type, marks: d.length };
   d.forEach((v, k) => fields['d' + k] = v.toFixed(4));
   try {
     const r = await fetch(`/api/profiles/${p.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) });
@@ -184,7 +193,7 @@ async function pollStatus() {
     if (s.last_seq < lastSeq) { lastSeq = 0; revSpeeds = []; intervals = []; }
     marks = s.config.marks_count;
     lastStatus = s;
-    if (s.profile.id !== activeId) loadProfiles();
+    if (activeId === null ? Date.now() - lastProfilesAttempt > 5000 : s.profile.id !== activeId) loadProfiles();
     $('phase').textContent = s.running ? (s.phase_locked ? 'phase locked' : 'locking phase…') : '';
     $('useMeasured').disabled = !(s.stats_revolutions >= 10 && s.phase_locked);
     $('conn').textContent = '';
