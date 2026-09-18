@@ -5,6 +5,9 @@
 namespace pulse_isr {
 namespace {
 
+// Single-producer/single-consumer ring: attachInterrupt() installs the ISR on the core
+// that calls it (setup() on core 1), and loop() runs on core 1 too, so the ISR preempts
+// the consumer rather than racing it. 64 slots hold 63 usable entries.
 constexpr uint8_t kRing = 64;
 volatile uint32_t ring[kRing];
 volatile uint8_t head = 0;  // written by ISR

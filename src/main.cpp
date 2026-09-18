@@ -34,6 +34,8 @@ void loop() {
   uint32_t t;
   while (pulse_isr::pop(t)) engine.onPulse(t);
 
+  engine.tick(micros());
+
   web_server::handle();
 
   uint32_t now_ms = millis();

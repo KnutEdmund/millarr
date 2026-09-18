@@ -31,8 +31,13 @@ void handleStatus() {
   char buf[768];
   EngineStatus s = engine_->status(micros());
   s.rejected_debounce += pulse_isr::rejected();
-  speed_core::formatStatusJson(s, engine_->config(), pulse_isr::dropped(), millis() / 1000, buf,
-                               sizeof buf);
+  int n = speed_core::formatStatusJson(s, engine_->config(), pulse_isr::dropped(), millis() / 1000,
+                                       buf, sizeof buf);
+  if (n < 0 || n >= (int)sizeof buf) {
+    Serial.println("status json truncated");
+    server.send(500, "text/plain", "status too large");
+    return;
+  }
   server.send(200, "application/json", buf);
 }
 
@@ -65,6 +70,7 @@ void handlePulsesCsv() {
   for (size_t i = 0; i < log.size(); ++i) {
     int n = speed_core::formatRecordCsv(log.at(i), line, sizeof line);
     if (n <= 0) continue;
+    if ((size_t)n >= sizeof line) n = sizeof line - 1;
     if (used + n >= sizeof chunk) {
       server.sendContent(chunk, used);
       used = 0;
@@ -86,7 +92,7 @@ void handleNotFound() {
   server.send(404, "text/plain", "not found");
 }
 
-adc_probe::Capture capture_buf;  // 800 bytes, static to keep it off the stack
+adc_probe::Capture capture_buf;  // 804 bytes, static to keep it off the stack
 
 void handleSignal() {
   adc_probe::capture(capture_buf);
@@ -101,6 +107,8 @@ void handleSignal() {
   size_t used = 0;
   for (uint16_t i = 0; i < adc_probe::kSamples; ++i) {
     int n = snprintf(chunk + used, sizeof chunk - used, "%s%u", i ? "," : "", capture_buf.samples[i]);
+    if (n < 0) break;
+    if ((size_t)n >= sizeof chunk - used) n = sizeof chunk - used - 1;
     used += n;
     if (used > sizeof chunk - 8) {
       server.sendContent(chunk, used);
