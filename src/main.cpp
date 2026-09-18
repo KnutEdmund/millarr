@@ -1,7 +1,9 @@
 #include <Arduino.h>
 
+#include "active_profile.h"
 #include "adc_probe.h"
 #include "config.h"
+#include "profile_store.h"
 #include "pulse_isr.h"
 #include "speed_engine.h"
 #include "web_server.h"
@@ -11,23 +13,42 @@ using speed_core::EngineConfig;
 using speed_core::EngineStatus;
 using speed_core::SpeedEngine;
 
-static const EngineConfig kConfig =
-    speed_core::makeEqualConfig(BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US, STOP_TIMEOUT_US);
+static const EngineConfig kConfig = speed_core::makeEqualConfig(BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US, STOP_TIMEOUT_US);
 SpeedEngine engine(kConfig);
 
 static uint32_t last_status_ms = 0;
+
+// True if the BOOT button (GPIO0) is already held at boot and stays held for 3 s.
+static bool bootButtonHeld() {
+  pinMode(0, INPUT_PULLUP);
+  for (int i = 0; i < 30; ++i) {
+    if (digitalRead(0) != LOW) return false;
+    delay(100);
+  }
+  return true;
+}
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(200);
   Serial.println();
   Serial.println("treadmill-sensor boot");
-  Serial.printf("belt=%.3fm marks=%u debounce=%luus stop=%luus\n", (double)BELT_LENGTH_M,
+  Serial.printf("defaults belt=%.3fm marks=%u debounce=%luus stop=%luus\n", (double)BELT_LENGTH_M,
                 (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US, (unsigned long)STOP_TIMEOUT_US);
+
+  profile_store::begin(BELT_LENGTH_M, MARKS_COUNT);
+  if (bootButtonHeld()) {
+    profile_store::resetWifi();
+    Serial.println("wifi settings reset (BOOT held)");
+  }
+  active_profile::apply(engine);
+
   pulse_isr::begin(SENSOR_DO_PIN, DEBOUNCE_US);
   adc_probe::begin(SENSOR_AO_PIN);
 
-  wifi_ap::begin(AP_SSID, AP_PASSWORD, MDNS_HOSTNAME);
+  String ssid, pass;
+  profile_store::loadWifi(ssid, pass);
+  wifi_ap::begin(ssid.c_str(), pass.c_str(), MDNS_HOSTNAME);
   web_server::begin(engine);
 }
 
