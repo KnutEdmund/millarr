@@ -1,11 +1,13 @@
 #include <unity.h>
 #include <vector>
 #include <cmath>
+#include <cstring>
 
 #include "pulse_log.h"
 #include "speed_engine.h"
 #include "speed_types.h"
 #include "synth.h"
+#include "format.h"
 
 using namespace speed_core;
 
@@ -260,6 +262,69 @@ void test_stats_window_reset_after_stop() {
   TEST_ASSERT_EQUAL_UINT32(ts.size() - 1 + ts2.size() - 1, static_cast<uint32_t>(s.distance_m / e.markDistance() + 0.5f));
 }
 
+// --- Formatting ---
+
+void test_csv_header() {
+  TEST_ASSERT_EQUAL_STRING("seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_mps\n", kCsvHeader);
+}
+
+void test_csv_record_line() {
+  PulseRecord r{};
+  r.seq = 42;
+  r.t_us = 123456789u;
+  r.interval_us = 338400u;
+  r.mark_index = 2;
+  r.mark_speed_mps = 2.77778f;
+  r.rev_speed_mps = 2.7f;
+  char buf[128];
+  int n = formatRecordCsv(r, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING("42,123456789,338400,2,2.778,2.700\n", buf);
+}
+
+void test_json_record() {
+  PulseRecord r{};
+  r.seq = 7;
+  r.t_us = 1000;
+  r.interval_us = 0;
+  r.mark_index = 0;
+  char buf[192];
+  int n = formatRecordJson(r, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"seq\":7,\"t_us\":1000,\"interval_us\":0,\"mark\":0,\"mark_speed_mps\":0.000,\"rev_speed_mps\":0.000}",
+      buf);
+}
+
+void test_json_status_contains_all_fields() {
+  EngineStatus s{};
+  s.speed_mps = 2.5f;
+  s.running = true;
+  s.distance_m = 12.34f;
+  s.pulse_count = 13;
+  s.revolution_count = 4;
+  s.rejected_debounce = 1;
+  s.mark_share[0] = 0.33f;
+  s.mark_share[1] = 0.33f;
+  s.mark_share[2] = 0.34f;
+  s.rev_speed_stddev = 0.012f;
+  s.stats_revolutions = 4;
+  s.log_size = 13;
+  s.log_overwritten = 0;
+  s.last_seq = 13;
+  EngineConfig c{2.82f, 3, 50000u, 3000000u};
+  char buf[768];
+  int n = formatStatusJson(s, c, 2, 99, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"speed_mps\":2.500,\"speed_kmh\":9.000,\"running\":true,\"distance_m\":12.340,"
+      "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"isr_dropped\":2,"
+      "\"mark_share\":[0.330,0.330,0.340],\"rev_speed_stddev\":0.0120,\"stats_revolutions\":4,"
+      "\"log_size\":13,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
+      "\"config\":{\"belt_length_m\":2.820,\"marks_count\":3,\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
+      buf);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -280,5 +345,9 @@ int main(int, char**) {
   RUN_TEST(test_stats_even_marks_share_is_one_third);
   RUN_TEST(test_stats_jitter_reflected_in_stddev);
   RUN_TEST(test_stats_window_reset_after_stop);
+  RUN_TEST(test_csv_header);
+  RUN_TEST(test_csv_record_line);
+  RUN_TEST(test_json_record);
+  RUN_TEST(test_json_status_contains_all_fields);
   return UNITY_END();
 }
