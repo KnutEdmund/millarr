@@ -8,6 +8,7 @@
 #include "speed_types.h"
 #include "synth.h"
 #include "format.h"
+#include "profile.h"
 
 using namespace speed_core;
 
@@ -438,6 +439,67 @@ void test_engine_reconfigure_keeps_log_and_distance() {
   TEST_ASSERT_EQUAL_UINT8(0, r.mark_index);
 }
 
+// --- Profile ---
+
+void test_profile_default_is_valid_and_equal() {
+  Profile p = makeDefaultProfile("Home treadmill", 2.82f, 3);
+  TEST_ASSERT_NULL(validate(p));
+  TEST_ASSERT_EQUAL_UINT8(PROFILE_VERSION, p.version);
+  TEST_ASSERT_EQUAL_STRING("Home treadmill", p.name);
+  TEST_ASSERT_EQUAL_UINT8(3, p.marks);
+  TEST_ASSERT_TRUE(p.type == TreadmillType::Belt);
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 0.94f, p.mark_distance_m[1]);
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 2.82f, beltLength(p));
+}
+
+void test_profile_validate_rejects_bad_values() {
+  Profile p = makeDefaultProfile("X", 2.82f, 3);
+  Profile q = p; q.marks = 0;              TEST_ASSERT_EQUAL_STRING("marks must be 1..8", validate(q));
+  q = p; q.marks = 9;                      TEST_ASSERT_EQUAL_STRING("marks must be 1..8", validate(q));
+  q = p; q.mark_distance_m[1] = 0.01f;     TEST_ASSERT_EQUAL_STRING("distance out of range", validate(q));
+  q = p; q.mark_distance_m[2] = 11.0f;     TEST_ASSERT_EQUAL_STRING("distance out of range", validate(q));
+  q = p; q.name[0] = '\0';                 TEST_ASSERT_EQUAL_STRING("name empty", validate(q));
+  q = p; q.version = 2;                    TEST_ASSERT_EQUAL_STRING("bad version", validate(q));
+  q = p; q.name[0] = '"';                  TEST_ASSERT_EQUAL_STRING("name has invalid characters", validate(q));
+  q = p; q.type = static_cast<TreadmillType>(7); TEST_ASSERT_EQUAL_STRING("bad type", validate(q));
+  q = p; memset(q.name, 'a', PROFILE_NAME_LEN);  TEST_ASSERT_EQUAL_STRING("name too long", validate(q));
+  // Distances beyond `marks` are ignored by validation.
+  q = p; q.mark_distance_m[5] = 99.0f;     TEST_ASSERT_NULL(validate(q));
+}
+
+void test_profile_belt_length_sums_only_used_marks() {
+  Profile p = makeDefaultProfile("X", 3.0f, 2);
+  p.mark_distance_m[2] = 50.0f;
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 3.0f, beltLength(p));
+}
+
+void test_profile_make_engine_config() {
+  Profile p = makeDefaultProfile("X", 2.82f, 3);
+  p.mark_distance_m[0] = 0.90f; p.mark_distance_m[1] = 1.00f; p.mark_distance_m[2] = 0.92f;
+  EngineConfig c = makeEngineConfig(p, 50000u, 3000000u);
+  TEST_ASSERT_EQUAL_UINT8(3, c.marks_count);
+  TEST_ASSERT_EQUAL_FLOAT(0.90f, c.mark_distance_m[0]);
+  TEST_ASSERT_EQUAL_FLOAT(1.00f, c.mark_distance_m[1]);
+  TEST_ASSERT_EQUAL_FLOAT(0.92f, c.mark_distance_m[2]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, c.mark_distance_m[3]);
+  TEST_ASSERT_EQUAL_UINT32(50000u, c.debounce_us);
+  TEST_ASSERT_EQUAL_UINT32(3000000u, c.stop_timeout_us);
+}
+
+void test_profile_type_names() {
+  TEST_ASSERT_EQUAL_STRING("belt", typeName(TreadmillType::Belt));
+  TEST_ASSERT_EQUAL_STRING("slats", typeName(TreadmillType::Slats));
+  TreadmillType t;
+  TEST_ASSERT_TRUE(parseTypeName("slats", t));
+  TEST_ASSERT_TRUE(t == TreadmillType::Slats);
+  TEST_ASSERT_FALSE(parseTypeName("rope", t));
+  TEST_ASSERT_TRUE(validName("Gym A", 24));
+  TEST_ASSERT_TRUE(validName("m\xc3\xb8lle", 24));   // UTF-8 allowed
+  TEST_ASSERT_FALSE(validName("", 24));
+  TEST_ASSERT_FALSE(validName("a\"b", 24));
+  TEST_ASSERT_FALSE(validName("tab\there", 24));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -464,6 +526,11 @@ int main(int, char**) {
   RUN_TEST(test_engine_phase_not_locked_before_first_revolution);
   RUN_TEST(test_engine_one_and_two_marks);
   RUN_TEST(test_engine_reconfigure_keeps_log_and_distance);
+  RUN_TEST(test_profile_default_is_valid_and_equal);
+  RUN_TEST(test_profile_validate_rejects_bad_values);
+  RUN_TEST(test_profile_belt_length_sums_only_used_marks);
+  RUN_TEST(test_profile_make_engine_config);
+  RUN_TEST(test_profile_type_names);
   RUN_TEST(test_csv_header);
   RUN_TEST(test_csv_record_line);
   RUN_TEST(test_json_record);
