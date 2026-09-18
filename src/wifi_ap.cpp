@@ -20,4 +20,11 @@ void begin(const char* ssid, const char* password, const char* mdns_host) {
   }
 }
 
+void restart(const char* ssid, const char* password, const char* mdns_host) {
+  MDNS.end();
+  WiFi.softAPdisconnect(true);
+  delay(100);
+  begin(ssid, password, mdns_host);
+}
+
 }  // namespace wifi_ap

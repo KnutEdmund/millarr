@@ -9,11 +9,13 @@
 
 #include "active_profile.h"
 #include "adc_probe.h"
+#include "config.h"
 #include "format.h"
 #include "profile.h"
 #include "profile_store.h"
 #include "pulse_isr.h"
 #include "web_page.h"
+#include "wifi_ap.h"
 
 using speed_core::EngineStatus;
 using speed_core::Profile;
@@ -206,6 +208,35 @@ void handleProfileDelete() {
   sendJson(200, "{\"ok\":true}");
 }
 
+bool ap_restart_pending = false;
+uint32_t ap_restart_at_ms = 0;
+
+void handleSettingsGet() {
+  String ssid, pass;
+  profile_store::loadWifi(ssid, pass);
+  char buf[128];
+  snprintf(buf, sizeof buf, "{\"ap_ssid\":\"%s\",\"mdns\":\"%s\"}", ssid.c_str(), MDNS_HOSTNAME);
+  sendJson(200, buf);
+}
+
+void handleWifiSave() {
+  String ssid = server.arg("ssid");
+  String pass = server.arg("password");
+  ssid.trim();
+  if (ssid.length() < 1 || ssid.length() > 32 || !speed_core::validName(ssid.c_str(), 33)) {
+    sendError(400, "ssid must be 1-32 printable characters");
+    return;
+  }
+  if (pass.length() < 8 || pass.length() > 63 || !speed_core::validName(pass.c_str(), 64)) {
+    sendError(400, "password must be 8-63 printable characters");
+    return;
+  }
+  profile_store::saveWifi(ssid, pass);
+  sendJson(200, "{\"ok\":true,\"restarting_ap\":true}");
+  ap_restart_pending = true;
+  ap_restart_at_ms = millis() + 1000;
+}
+
 }  // namespace
 
 void begin(SpeedEngine& engine) {
@@ -221,11 +252,22 @@ void begin(SpeedEngine& engine) {
   server.on(UriBraces("/api/profiles/{}/activate"), HTTP_POST, handleProfileActivate);
   server.on(UriBraces("/api/profiles/{}/delete"), HTTP_POST, handleProfileDelete);
   server.on(UriBraces("/api/profiles/{}"), HTTP_POST, handleProfileSave);
+  server.on("/api/settings", HTTP_GET, handleSettingsGet);
+  server.on("/api/settings/wifi", HTTP_POST, handleWifiSave);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.println("http: listening on port 80");
 }
 
-void handle() { server.handleClient(); }
+void handle() {
+  server.handleClient();
+  if (ap_restart_pending && (int32_t)(millis() - ap_restart_at_ms) >= 0) {
+    ap_restart_pending = false;
+    String ssid, pass;
+    profile_store::loadWifi(ssid, pass);
+    Serial.println("restarting AP with new settings");
+    wifi_ap::restart(ssid.c_str(), pass.c_str(), MDNS_HOSTNAME);
+  }
+}
 
 }  // namespace web_server
