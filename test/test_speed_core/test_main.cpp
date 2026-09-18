@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <vector>
+#include <cmath>
 
 #include "pulse_log.h"
 #include "speed_engine.h"
@@ -187,6 +188,78 @@ void test_engine_reset_clears_everything() {
   TEST_ASSERT_FALSE(s.running);
 }
 
+// --- Statistics ---
+
+void test_stats_uneven_marks_rev_speed_unaffected() {
+  SpeedEngine e(defaultConfig());
+  SynthOptions o;
+  o.mark_fraction = {0.30, 0.35, 0.35};
+  const double v = 12.0 / 3.6;
+  auto ts = synthConstant(v, 60.0, o);
+  feed(e, ts);
+  EngineStatus s = e.status(ts.back());
+
+  // Revolution speed cancels the spacing error.
+  TEST_ASSERT_FLOAT_WITHIN(v * 0.001, v, s.speed_mps);
+  TEST_ASSERT_FLOAT_WITHIN(v * 0.001, v, e.log().at(e.log().size() - 1).rev_speed_mps);
+
+  // Mark speed does not: the interval ending at mark_index 1 covers fraction[0] = 0.30.
+  bool saw_low = false, saw_high = false;
+  for (size_t i = e.log().size() - 6; i < e.log().size(); ++i) {
+    const PulseRecord& r = e.log().at(i);
+    if (r.mark_index == 1) saw_low = std::fabs(r.mark_speed_mps - v / 0.90) < v * 0.002;
+    if (r.mark_index == 2) saw_high = std::fabs(r.mark_speed_mps - v / 1.05) < v * 0.002;
+  }
+  TEST_ASSERT_TRUE(saw_low);
+  TEST_ASSERT_TRUE(saw_high);
+
+  // mark_share[m] is the share of the interval ending at mark m.
+  TEST_ASSERT_EQUAL_UINT8(STATS_REVOLUTIONS, s.stats_revolutions);
+  TEST_ASSERT_FLOAT_WITHIN(0.002f, 0.35f, s.mark_share[0]);  // fraction[2]
+  TEST_ASSERT_FLOAT_WITHIN(0.002f, 0.30f, s.mark_share[1]);  // fraction[0]
+  TEST_ASSERT_FLOAT_WITHIN(0.002f, 0.35f, s.mark_share[2]);  // fraction[1]
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.mark_share[3]);            // unused slots stay 0
+}
+
+void test_stats_even_marks_share_is_one_third() {
+  SpeedEngine e(defaultConfig());
+  auto ts = synthConstant(3.0, 60.0);
+  feed(e, ts);
+  EngineStatus s = e.status(ts.back());
+  for (int m = 0; m < 3; ++m) TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f / 3.0f, s.mark_share[m]);
+  TEST_ASSERT_FLOAT_WITHIN(0.005f, 0.0f, s.rev_speed_stddev);
+}
+
+void test_stats_jitter_reflected_in_stddev() {
+  SpeedEngine e(defaultConfig());
+  SynthOptions o;
+  o.jitter_frac = 0.01;  // 1 % Gaussian per interval
+  const double v = 10.0 / 3.6;
+  auto ts = synthConstant(v, 120.0, o);
+  feed(e, ts);
+  EngineStatus s = e.status(ts.back());
+  // Three independent 1 % interval errors give ~0.58 % on the revolution; allow a wide band
+  // because the window is only 10 revolutions.
+  TEST_ASSERT_TRUE(s.rev_speed_stddev > v * 0.001);
+  TEST_ASSERT_TRUE(s.rev_speed_stddev < v * 0.02);
+}
+
+void test_stats_window_reset_after_stop() {
+  SpeedEngine e(defaultConfig());
+  auto ts = synthConstant(3.0, 30.0);
+  feed(e, ts);
+  uint32_t restart = ts.back() + 10000000;  // 10 s gap: stop
+  SynthOptions o;
+  o.start_us = restart;
+  auto ts2 = synthConstant(3.0, 2.0, o);  // ~6 pulses: 1 full revolution
+  feed(e, ts2);
+  EngineStatus s = e.status(ts2.back());
+  // Old revolutions stay in the window (stats are per reset, not per run) and the
+  // restart pulse contributed no interval.
+  TEST_ASSERT_EQUAL_UINT8(STATS_REVOLUTIONS, s.stats_revolutions);
+  TEST_ASSERT_EQUAL_UINT32(ts.size() - 1 + ts2.size() - 1, static_cast<uint32_t>(s.distance_m / e.markDistance() + 0.5f));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -203,5 +276,9 @@ int main(int, char**) {
   RUN_TEST(test_engine_distance_counts_intervals);
   RUN_TEST(test_engine_micros_wrap);
   RUN_TEST(test_engine_reset_clears_everything);
+  RUN_TEST(test_stats_uneven_marks_rev_speed_unaffected);
+  RUN_TEST(test_stats_even_marks_share_is_one_third);
+  RUN_TEST(test_stats_jitter_reflected_in_stddev);
+  RUN_TEST(test_stats_window_reset_after_stop);
   return UNITY_END();
 }
