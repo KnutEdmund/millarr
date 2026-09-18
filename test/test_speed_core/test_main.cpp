@@ -83,7 +83,7 @@ void test_log_clear() {
 }
 
 static EngineConfig defaultConfig() {
-  return EngineConfig{2.82f, 3, 50000u, 3000000u};
+  return makeEqualConfig(2.82f, 3, 50000u, 3000000u);
 }
 
 static void feed(SpeedEngine& e, const std::vector<uint32_t>& ts) {
@@ -278,7 +278,7 @@ void test_stats_window_survives_stop() {
   // Old revolutions stay in the window (stats are per reset, not per run) and the
   // restart pulse contributed no interval.
   TEST_ASSERT_EQUAL_UINT8(STATS_REVOLUTIONS, s.stats_revolutions);
-  TEST_ASSERT_EQUAL_UINT32(ts.size() - 1 + ts2.size() - 1, static_cast<uint32_t>(s.distance_m / e.markDistance() + 0.5f));
+  TEST_ASSERT_EQUAL_UINT32(ts.size() - 1 + ts2.size() - 1, static_cast<uint32_t>(s.distance_m / e.meanMarkDistance() + 0.5f));
 }
 
 // --- Formatting ---
@@ -332,7 +332,7 @@ void test_json_status_contains_all_fields() {
   s.log_capacity = 2048;
   s.log_overwritten = 0;
   s.last_seq = 13;
-  EngineConfig c{2.82f, 3, 50000u, 3000000u};
+  EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
   char buf[768];
   int n = formatStatusJson(s, c, 2, 99, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
@@ -343,6 +343,99 @@ void test_json_status_contains_all_fields() {
       "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
       "\"config\":{\"belt_length_m\":2.820,\"marks_count\":3,\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
       buf);
+}
+
+// --- Per-mark distances and phase lock ---
+
+void test_config_belt_length_and_equal_config() {
+  EngineConfig c = makeEqualConfig(2.82f, 3, 1, 2);
+  TEST_ASSERT_EQUAL_UINT8(3, c.marks_count);
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 0.94f, c.mark_distance_m[0]);
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 2.82f, beltLength(c));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, c.mark_distance_m[3]);  // unused slots stay zero
+  EngineConfig z = makeEqualConfig(2.82f, 0, 1, 2);
+  TEST_ASSERT_EQUAL_UINT8(1, z.marks_count);
+  EngineConfig big = makeEqualConfig(2.82f, 20, 1, 2);
+  TEST_ASSERT_EQUAL_UINT8(MAX_MARKS, big.marks_count);
+}
+
+void test_engine_phase_alignment_uneven_marks() {
+  const float d[3] = {0.90f, 1.00f, 0.92f};  // sums to 2.82
+  const double v = 10.0 / 3.6;
+  for (int start = 0; start < 3; ++start) {
+    EngineConfig c = defaultConfig();
+    for (int k = 0; k < 3; ++k) c.mark_distance_m[k] = d[k];
+    SpeedEngine e(c);
+    SynthOptions o;
+    // The synthetic belt starts with physical mark `start` passing the sensor.
+    o.mark_fraction = {d[start % 3] / 2.82, d[(start + 1) % 3] / 2.82, d[(start + 2) % 3] / 2.82};
+    auto ts = synthConstant(v, 30.0, o);
+    feed(e, ts);
+    EngineStatus s = e.status(ts.back());
+    TEST_ASSERT_TRUE(s.phase_locked);
+    TEST_ASSERT_FLOAT_WITHIN(v * 0.001, v, s.speed_mps);
+    // From the pulse that completes the first revolution on, indices are physical
+    // and mark speed uses the physical distance.
+    for (size_t i = 3; i < e.log().size(); ++i) {
+      const PulseRecord& r = e.log().at(i);
+      TEST_ASSERT_EQUAL_UINT8((i + start) % 3, r.mark_index);
+      TEST_ASSERT_FLOAT_WITHIN(v * 0.001, v, r.mark_speed_mps);
+    }
+    // mark_share[p] is the share of the interval ending at physical mark p = d[p-1] / belt.
+    for (int p = 0; p < 3; ++p) {
+      TEST_ASSERT_FLOAT_WITHIN(0.002f, d[(p + 2) % 3] / 2.82f, s.mark_share[p]);
+    }
+  }
+}
+
+void test_engine_phase_not_locked_before_first_revolution() {
+  SpeedEngine e(defaultConfig());
+  auto ts = synthConstant(2.0, 10.0);
+  e.onPulse(ts[0]);
+  e.onPulse(ts[1]);
+  e.onPulse(ts[2]);
+  TEST_ASSERT_FALSE(e.status(ts[2]).phase_locked);
+  e.onPulse(ts[3]);
+  TEST_ASSERT_TRUE(e.status(ts[3]).phase_locked);
+}
+
+void test_engine_one_and_two_marks() {
+  for (uint8_t marks = 1; marks <= 2; ++marks) {
+    SpeedEngine e(makeEqualConfig(2.82f, marks, 50000u, 3000000u));
+    SynthOptions o;
+    o.marks = marks;
+    const double v = 8.0 / 3.6;
+    auto ts = synthConstant(v, 30.0, o);
+    feed(e, ts);
+    EngineStatus s = e.status(ts.back());
+    TEST_ASSERT_TRUE(s.phase_locked);
+    TEST_ASSERT_FLOAT_WITHIN(v * 0.001, v, s.speed_mps);
+    TEST_ASSERT_EQUAL_UINT32((ts.size() - 1) / marks, s.revolution_count);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, (ts.size() - 1) * (2.82f / marks), s.distance_m);
+  }
+}
+
+void test_engine_reconfigure_keeps_log_and_distance() {
+  SpeedEngine e(defaultConfig());
+  auto ts = synthConstant(2.0, 20.0);
+  feed(e, ts);
+  EngineStatus before = e.status(ts.back());
+  TEST_ASSERT_TRUE(before.stats_revolutions > 0);
+
+  e.reconfigure(makeEqualConfig(3.0f, 2, 50000u, 3000000u));
+  EngineStatus s = e.status(ts.back());
+  TEST_ASSERT_EQUAL_UINT8(2, e.config().marks_count);
+  TEST_ASSERT_EQUAL_UINT8(0, s.stats_revolutions);
+  TEST_ASSERT_FALSE(s.phase_locked);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, s.speed_mps);
+  TEST_ASSERT_EQUAL_UINT32(before.pulse_count, s.pulse_count);
+  TEST_ASSERT_EQUAL_UINT32(before.log_size, s.log_size);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, before.distance_m, s.distance_m);
+
+  e.onPulse(ts.back() + 500000u);
+  const PulseRecord& r = e.log().at(e.log().size() - 1);
+  TEST_ASSERT_EQUAL_UINT32(0, r.interval_us);
+  TEST_ASSERT_EQUAL_UINT8(0, r.mark_index);
 }
 
 int main(int, char**) {
@@ -366,6 +459,11 @@ int main(int, char**) {
   RUN_TEST(test_stats_even_marks_share_is_one_third);
   RUN_TEST(test_stats_jitter_reflected_in_stddev);
   RUN_TEST(test_stats_window_survives_stop);
+  RUN_TEST(test_config_belt_length_and_equal_config);
+  RUN_TEST(test_engine_phase_alignment_uneven_marks);
+  RUN_TEST(test_engine_phase_not_locked_before_first_revolution);
+  RUN_TEST(test_engine_one_and_two_marks);
+  RUN_TEST(test_engine_reconfigure_keeps_log_and_distance);
   RUN_TEST(test_csv_header);
   RUN_TEST(test_csv_record_line);
   RUN_TEST(test_json_record);

@@ -15,24 +15,44 @@ constexpr uint8_t STATS_REVOLUTIONS = 10;  // window for mark_share and jitter
 constexpr size_t LOG_CAPACITY = SPEED_CORE_LOG_CAPACITY;
 
 struct EngineConfig {
-  float belt_length_m;      // e.g. 2.82
-  uint8_t marks_count;      // 1..MAX_MARKS, e.g. 3
-  uint32_t debounce_us;     // reject pulses closer than this to the previous one
-  uint32_t stop_timeout_us; // no pulse for this long => stopped
+  uint8_t marks_count;                // 1..MAX_MARKS
+  float mark_distance_m[MAX_MARKS];   // [k] = distance from mark k to mark k+1 (mod marks_count)
+  uint32_t debounce_us;               // reject pulses closer than this to the previous one
+  uint32_t stop_timeout_us;           // no pulse for this long => stopped
 };
+
+// Sum of the first marks_count distances.
+inline float beltLength(const EngineConfig& c) {
+  const uint8_t n = c.marks_count > MAX_MARKS ? MAX_MARKS : c.marks_count;
+  float sum = 0.0f;
+  for (uint8_t k = 0; k < n; ++k) sum += c.mark_distance_m[k];
+  return sum;
+}
+
+// Equal spacing: belt_length_m / marks_count for every mark.
+inline EngineConfig makeEqualConfig(float belt_length_m, uint8_t marks_count, uint32_t debounce_us,
+                                    uint32_t stop_timeout_us) {
+  EngineConfig c{};
+  c.marks_count = marks_count < 1 ? 1 : (marks_count > MAX_MARKS ? MAX_MARKS : marks_count);
+  for (uint8_t k = 0; k < c.marks_count; ++k) c.mark_distance_m[k] = belt_length_m / c.marks_count;
+  c.debounce_us = debounce_us;
+  c.stop_timeout_us = stop_timeout_us;
+  return c;
+}
 
 struct PulseRecord {
   uint32_t seq;          // 1-based, monotonically increasing, survives log wrap
   uint32_t t_us;         // timestamp (micros), wraps every ~71.6 min
   uint32_t interval_us;  // since previous accepted pulse; 0 for the first pulse of a run
-  uint8_t mark_index;    // pulse index since (re)start modulo marks_count
-  float mark_speed_mps;  // (belt_length / marks) / interval; 0 when interval is 0
+  uint8_t mark_index;    // physical mark once the phase is locked; pulse index since (re)start mod marks before
+  float mark_speed_mps;  // distance of the interval ending at this mark / interval; 0 when interval is 0
   float rev_speed_mps;   // belt_length / time over the last marks_count intervals; 0 until available
 };
 
 struct EngineStatus {
   float speed_mps;             // rev speed of the newest pulse, or 0 when stopped
   bool running;
+  bool phase_locked;           // true once the current run has completed a revolution and chosen its mark phase
   float distance_m;            // pulses with an interval * belt_length / marks
   uint32_t pulse_count;        // accepted pulses since reset
   uint32_t revolution_count;   // completed revolutions since reset

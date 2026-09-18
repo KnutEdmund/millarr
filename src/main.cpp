@@ -11,7 +11,8 @@ using speed_core::EngineConfig;
 using speed_core::EngineStatus;
 using speed_core::SpeedEngine;
 
-static const EngineConfig kConfig{BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US, STOP_TIMEOUT_US};
+static const EngineConfig kConfig =
+    speed_core::makeEqualConfig(BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US, STOP_TIMEOUT_US);
 SpeedEngine engine(kConfig);
 
 static uint32_t last_status_ms = 0;

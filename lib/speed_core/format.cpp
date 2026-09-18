@@ -47,7 +47,7 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, uint32_t isr_
                         (double)s.rev_speed_stddev, (unsigned)s.stats_revolutions,
                         (unsigned long)s.log_size, (unsigned long)s.log_capacity,
                         (unsigned long)s.log_overwritten,
-                        (unsigned long)s.last_seq, (unsigned long)uptime_s, (double)c.belt_length_m,
+                        (unsigned long)s.last_seq, (unsigned long)uptime_s, (double)beltLength(c),
                         (unsigned)c.marks_count, (unsigned long)c.debounce_us,
                         (unsigned long)c.stop_timeout_us);
   if (k < 0) return k;

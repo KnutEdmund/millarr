@@ -12,6 +12,10 @@ class SpeedEngine {
  public:
   explicit SpeedEngine(const EngineConfig& cfg);
 
+  // Replace the configuration at runtime. Restarts the run and clears the
+  // statistics window; keeps the pulse log, counters and accumulated distance.
+  void reconfigure(const EngineConfig& cfg);
+
   // Feed one falling-edge timestamp (micros). Applies debounce and stop detection.
   void onPulse(uint32_t t_us);
 
@@ -27,10 +31,15 @@ class SpeedEngine {
 
   const PulseLog& log() const { return log_; }
   const EngineConfig& config() const { return cfg_; }
-  float markDistance() const { return cfg_.belt_length_m / cfg_.marks_count; }
+  float meanMarkDistance() const { return beltLength(cfg_) / cfg_.marks_count; }
+  // Distance of the interval ending at run-relative slot `slot`: the physical
+  // mark's distance once the phase is locked, the mean before that.
+  float distanceForSlot(uint8_t slot) const;
 
  private:
+  void clampConfig();
   void startRun();
+  void lockPhase();
   void pushRevolutionStats(float rev_speed);
 
   EngineConfig cfg_;
@@ -40,11 +49,14 @@ class SpeedEngine {
   uint32_t last_t_ = 0;
   uint32_t next_seq_ = 1;
   uint32_t run_count_ = 0;                 // accepted pulses since (re)start
-  uint32_t recent_ts_[MAX_MARKS] = {};     // timestamp per mark slot, for rev speed
+  uint32_t recent_ts_[MAX_MARKS] = {};     // timestamp per run-relative slot, for rev speed
   float last_rev_speed_ = 0.0f;
-  uint32_t cur_rev_intervals_[MAX_MARKS] = {};
+  uint32_t cur_rev_intervals_[MAX_MARKS] = {};  // indexed by run-relative slot
+  bool phase_locked_ = false;
+  uint8_t phase_shift_ = 0;                // physical mark = (slot + phase_shift_) % marks
+  float distance_m_ = 0.0f;
 
-  // Stats window over the last STATS_REVOLUTIONS completed revolutions.
+  // Stats window over the last STATS_REVOLUTIONS completed revolutions, indexed by physical mark.
   uint32_t rev_intervals_[STATS_REVOLUTIONS][MAX_MARKS] = {};
   float rev_speeds_[STATS_REVOLUTIONS] = {};
   uint8_t stats_head_ = 0;
