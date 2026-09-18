@@ -3,6 +3,8 @@
 #include "config.h"
 #include "pulse_isr.h"
 #include "speed_engine.h"
+#include "web_server.h"
+#include "wifi_ap.h"
 
 using speed_core::EngineConfig;
 using speed_core::EngineStatus;
@@ -21,11 +23,16 @@ void setup() {
   Serial.printf("belt=%.3fm marks=%u debounce=%luus stop=%luus\n", (double)BELT_LENGTH_M,
                 (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US, (unsigned long)STOP_TIMEOUT_US);
   pulse_isr::begin(SENSOR_DO_PIN, DEBOUNCE_US);
+
+  wifi_ap::begin(AP_SSID, AP_PASSWORD, MDNS_HOSTNAME);
+  web_server::begin(engine);
 }
 
 void loop() {
   uint32_t t;
   while (pulse_isr::pop(t)) engine.onPulse(t);
+
+  web_server::handle();
 
   uint32_t now_ms = millis();
   if (now_ms - last_status_ms >= STATUS_INTERVAL_MS) {

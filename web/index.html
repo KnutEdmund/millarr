@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treadmill Sensor</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 1rem; background: #111; color: #eee; }
+  .big { font-size: 3rem; font-weight: 600; }
+  .row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .card { background: #1e1e1e; padding: 0.75rem 1rem; border-radius: 8px; min-width: 8rem; }
+  .label { color: #999; font-size: 0.8rem; }
+  button, a.btn { background: #333; color: #eee; border: 0; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; cursor: pointer; }
+  pre { background: #1e1e1e; padding: 0.5rem; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Treadmill Sensor</h1>
+<div class="row">
+  <div class="card"><div class="label">Speed</div><div class="big" id="kmh">0.00</div><div class="label">km/h</div></div>
+  <div class="card"><div class="label">Distance</div><div class="big" id="dist">0.0</div><div class="label">m</div></div>
+  <div class="card"><div class="label">State</div><div class="big" id="state">stopped</div></div>
+</div>
+<div class="row">
+  <a class="btn" href="/api/pulses.csv">Download CSV</a>
+  <button id="reset">Reset</button>
+</div>
+<pre id="raw"></pre>
+<script>
+async function poll() {
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    document.getElementById('kmh').textContent = s.speed_kmh.toFixed(2);
+    document.getElementById('dist').textContent = s.distance_m.toFixed(1);
+    document.getElementById('state').textContent = s.running ? 'running' : 'stopped';
+    document.getElementById('raw').textContent = JSON.stringify(s, null, 1);
+  } catch (e) {
+    document.getElementById('state').textContent = 'offline';
+  }
+}
+document.getElementById('reset').onclick = async () => {
+  if (!confirm('Reset log and distance?')) return;
+  await fetch('/api/reset', { method: 'POST' });
+};
+setInterval(poll, 500);
+poll();
+</script>
+</body>
+</html>
