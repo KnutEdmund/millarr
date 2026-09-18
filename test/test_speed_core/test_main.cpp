@@ -413,6 +413,19 @@ void test_engine_phase_alignment_uneven_marks() {
   }
 }
 
+void test_engine_first_revolution_distance_is_belt_length() {
+  const float d[3] = {0.90f, 1.00f, 0.92f};
+  EngineConfig c = defaultConfig();
+  for (int k = 0; k < 3; ++k) c.mark_distance_m[k] = d[k];
+  SpeedEngine e(c);
+  SynthOptions o;
+  o.mark_fraction = {d[0] / 2.82, d[1] / 2.82, d[2] / 2.82};
+  auto ts = synthConstant(2.0, 10.0, o);
+  for (size_t i = 0; i < 4; ++i) e.onPulse(ts[i]);   // exactly one revolution: 3 intervals
+  TEST_ASSERT_TRUE(e.status(ts[3]).phase_locked);
+  TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.82f, e.status(ts[3]).distance_m);
+}
+
 void test_engine_phase_not_locked_before_first_revolution() {
   SpeedEngine e(defaultConfig());
   auto ts = synthConstant(2.0, 10.0);
@@ -461,6 +474,30 @@ void test_engine_reconfigure_keeps_log_and_distance() {
   const PulseRecord& r = e.log().at(e.log().size() - 1);
   TEST_ASSERT_EQUAL_UINT32(0, r.interval_us);
   TEST_ASSERT_EQUAL_UINT8(0, r.mark_index);
+}
+
+void test_stats_window_cleared_when_phase_changes_after_restart() {
+  const float d[3] = {0.90f, 1.00f, 0.92f};
+  EngineConfig c = defaultConfig();
+  for (int k = 0; k < 3; ++k) c.mark_distance_m[k] = d[k];
+  SpeedEngine e(c);
+  SynthOptions o;
+  o.mark_fraction = {d[0] / 2.82, d[1] / 2.82, d[2] / 2.82};  // run 1 starts at physical mark 0
+  auto ts = synthConstant(2.0, 60.0, o);
+  feed(e, ts);
+  TEST_ASSERT_EQUAL_UINT8(STATS_REVOLUTIONS, e.status(ts.back()).stats_revolutions);
+
+  SynthOptions o2;
+  o2.start_us = ts.back() + 10000000u;                          // 10 s pause: stop
+  o2.mark_fraction = {d[1] / 2.82, d[2] / 2.82, d[0] / 2.82};  // run 2 starts at physical mark 1
+  auto ts2 = synthConstant(2.0, 6.0, o2);                      // about 4 revolutions
+  feed(e, ts2);
+  EngineStatus s = e.status(ts2.back());
+  TEST_ASSERT_TRUE(s.phase_locked);
+  TEST_ASSERT_TRUE(s.stats_revolutions < STATS_REVOLUTIONS);   // window restarted with the new phase
+  for (int p = 0; p < 3; ++p) {
+    TEST_ASSERT_FLOAT_WITHIN(0.002f, d[(p + 2) % 3] / 2.82f, s.mark_share[p]);  // per physical mark, not blended
+  }
 }
 
 // --- Profile ---
@@ -547,9 +584,11 @@ int main(int, char**) {
   RUN_TEST(test_stats_window_survives_stop);
   RUN_TEST(test_config_belt_length_and_equal_config);
   RUN_TEST(test_engine_phase_alignment_uneven_marks);
+  RUN_TEST(test_engine_first_revolution_distance_is_belt_length);
   RUN_TEST(test_engine_phase_not_locked_before_first_revolution);
   RUN_TEST(test_engine_one_and_two_marks);
   RUN_TEST(test_engine_reconfigure_keeps_log_and_distance);
+  RUN_TEST(test_stats_window_cleared_when_phase_changes_after_restart);
   RUN_TEST(test_profile_default_is_valid_and_equal);
   RUN_TEST(test_profile_validate_rejects_bad_values);
   RUN_TEST(test_profile_belt_length_sums_only_used_marks);

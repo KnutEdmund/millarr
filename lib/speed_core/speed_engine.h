@@ -55,6 +55,8 @@ class SpeedEngine {
   bool phase_locked_ = false;
   uint8_t phase_shift_ = 0;                // physical mark = (slot + phase_shift_) % marks
   float distance_m_ = 0.0f;
+  uint8_t last_locked_shift_ = 0;
+  bool ever_locked_ = false;
 
   // Stats window over the last STATS_REVOLUTIONS completed revolutions, indexed by physical mark.
   uint32_t rev_intervals_[STATS_REVOLUTIONS][MAX_MARKS] = {};

@@ -15,6 +15,7 @@ void SpeedEngine::reconfigure(const EngineConfig& cfg) {
   cfg_ = cfg;
   clampConfig();
   startRun();
+  ever_locked_ = false;
   stats_head_ = 0;
   stats_count_ = 0;
 }
@@ -62,6 +63,12 @@ void SpeedEngine::lockPhase() {
   }
   phase_shift_ = best;
   phase_locked_ = true;
+  if (ever_locked_ && best != last_locked_shift_) {
+    stats_head_ = 0;
+    stats_count_ = 0;
+  }
+  last_locked_shift_ = best;
+  ever_locked_ = true;
 }
 
 void SpeedEngine::onPulse(uint32_t t) {
@@ -83,7 +90,8 @@ void SpeedEngine::onPulse(uint32_t t) {
 
   // The pulse completing the first revolution of a run fixes the phase before
   // its own mark values are computed.
-  if (!phase_locked_ && interval > 0 && run_count_ >= marks) lockPhase();
+  const bool locked_now = !phase_locked_ && interval > 0 && run_count_ >= marks;
+  if (locked_now) lockPhase();
 
   float mark_speed = 0.0f;
   float rev_speed = 0.0f;
@@ -91,7 +99,7 @@ void SpeedEngine::onPulse(uint32_t t) {
   if (interval > 0) {
     const float d = distanceForSlot(slot);
     mark_speed = d / (interval * 1e-6f);
-    distance_m_ += d;
+    distance_m_ += locked_now ? meanMarkDistance() : d;
     ++interval_count_;
   }
 
@@ -190,6 +198,7 @@ void SpeedEngine::reset() {
   last_t_ = 0;
   next_seq_ = 1;
   startRun();
+  ever_locked_ = false;
   stats_head_ = 0;
   stats_count_ = 0;
   pulse_count_ = 0;
