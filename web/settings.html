@@ -35,7 +35,7 @@
 
 <h2>Treadmill profiles</h2>
 <div id="profiles"></div>
-<div class="row"><button id="add" class="primary">Add profile</button><span class="msg" id="pmsg"></span></div>
+<div class="row"><button id="add" class="primary" disabled>Add profile</button><span class="msg" id="pmsg"></span></div>
 
 <div class="card" id="editor" hidden>
   <div class="label" id="editorTitle">Edit profile</div>
@@ -58,7 +58,7 @@
     <div class="field grow"><div class="label">Password (8–63 characters)</div><input id="wPass" type="password" maxlength="63"></div>
     <div class="field grow"><div class="label">Confirm password</div><input id="wPass2" type="password" maxlength="63"></div>
   </div>
-  <div class="warn">Saving restarts the sensor's network. Reconnect your phone or laptop to the new name afterwards. If you forget the password, hold BOOT while resetting the sensor to restore the defaults.</div>
+  <div class="warn">Saving restarts the sensor's network. Reconnect your phone or laptop to the new name afterwards. If you forget the password, hold BOOT for 3 seconds right after resetting the sensor to restore the defaults.</div>
   <div class="row" style="margin-top:0.6rem"><button id="wSave" class="primary">Save Wi-Fi settings</button><span class="msg" id="wmsg"></span></div>
 </div>
 
@@ -181,7 +181,7 @@ $('wSave').onclick = async () => {
   } catch (err) { msg($('wmsg'), err.message, false); }
 };
 
-loadProfiles().catch(() => msg($('pmsg'), 'offline', false));
+loadProfiles().catch(() => { $('add').disabled = true; msg($('pmsg'), 'offline', false); });
 loadSettings();
 </script>
 </body>

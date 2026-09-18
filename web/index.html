@@ -87,32 +87,37 @@ let activeId = null;
 let lastStatus = null;
 let profilesInFlight = false;
 let lastProfilesAttempt = 0;
+let profilesPromise = null;
 
 async function loadProfiles() {
-  if (profilesInFlight) return;
+  if (profilesInFlight) return profilesPromise;
   profilesInFlight = true;
   lastProfilesAttempt = Date.now();
-  try {
-    const d = await (await fetch('/api/profiles')).json();
-    profiles = d.profiles; activeId = d.active;
-    const sel = $('profile');
-    sel.innerHTML = '';
-    for (const p of profiles) {
-      const o = document.createElement('option');
-      o.value = p.id; o.textContent = `${p.name} (${p.belt_length_m.toFixed(2)} m, ${p.marks} marks)`;
-      sel.appendChild(o);
+  profilesPromise = (async () => {
+    try {
+      const d = await (await fetch('/api/profiles')).json();
+      profiles = d.profiles; activeId = d.active;
+      const sel = $('profile');
+      sel.innerHTML = '';
+      for (const p of profiles) {
+        const o = document.createElement('option');
+        o.value = p.id; o.textContent = `${p.name} (${p.belt_length_m.toFixed(2)} m, ${p.marks} marks)`;
+        sel.appendChild(o);
+      }
+      sel.value = String(activeId);
+    } catch (e) { /* offline; status poll reports it */
+    } finally {
+      profilesInFlight = false;
     }
-    sel.value = String(activeId);
-  } catch (e) { /* offline; status poll reports it */
-  } finally {
-    profilesInFlight = false;
-  }
+  })();
+  return profilesPromise;
 }
 
 $('profile').onchange = async () => {
   const id = $('profile').value;
   try {
-    await fetch(`/api/profiles/${id}/activate`, { method: 'POST' });
+    const r = await fetch(`/api/profiles/${id}/activate`, { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
     await loadProfiles();
   } catch (e) { $('conn').textContent = 'activate failed'; }
 };
@@ -125,14 +130,14 @@ function proposedDistances(s) {
 
 $('useMeasured').onclick = async () => {
   const s = lastStatus; if (!s) return;
-  await loadProfiles();
-  const p = profiles.find(x => x.id === s.profile.id); if (!p) return;
-  const d = proposedDistances(s);
-  const lines = d.map((v, k) => `mark ${k} → ${(k + 1) % d.length}: ${p.mark_distance_m[k].toFixed(3)} → ${v.toFixed(3)} m`).join('\n');
-  if (!confirm(`Update "${p.name}" with measured distances?\n\n${lines}\n\nBelt length stays ${s.config.belt_length_m.toFixed(3)} m.`)) return;
-  const fields = { name: p.name, type: p.type, marks: d.length };
-  d.forEach((v, k) => fields['d' + k] = v.toFixed(4));
   try {
+    await loadProfiles();
+    const p = profiles.find(x => x.id === s.profile.id); if (!p) return;
+    const d = proposedDistances(s);
+    const lines = d.map((v, k) => `mark ${k} → ${(k + 1) % d.length}: ${(p.mark_distance_m[k] ?? 0).toFixed(3)} → ${v.toFixed(3)} m`).join('\n');
+    if (!confirm(`Update "${p.name}" with measured distances?\n\n${lines}\n\nBelt length stays ${s.config.belt_length_m.toFixed(3)} m.`)) return;
+    const fields = { name: p.name, type: p.type, marks: d.length };
+    d.forEach((v, k) => fields['d' + k] = v.toFixed(4));
     const r = await fetch(`/api/profiles/${p.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) });
     if (!r.ok) throw new Error((await r.json()).error || r.status);
     $('calMsg').textContent = 'Saved. The phase re-locks on the next revolution.';
