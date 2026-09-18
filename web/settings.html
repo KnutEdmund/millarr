@@ -104,7 +104,7 @@ function renderDist(values) {
   for (let k = 0; k < n; k++) {
     const i = document.createElement('input');
     i.type = 'number'; i.step = '0.001'; i.min = '0.05'; i.max = '10'; i.id = 'd' + k;
-    i.value = values && values[k] != null ? values[k].toFixed(3) : '';
+    i.value = values && Number.isFinite(values[k]) ? values[k].toFixed(3) : '';
     i.placeholder = 'mark ' + k + ' → ' + ((k + 1) % n);
     i.oninput = updateSum;
     box.appendChild(i);
