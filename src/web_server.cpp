@@ -186,8 +186,10 @@ void handleProfileSave() {
     p.mark_distance_m[k] = server.arg(key).toFloat();
   }
   if (const char* why = speed_core::validate(p)) { sendError(400, why); return; }
+  Profile old{};
+  const bool had = profile_store::load(slot, old);
   if (!profile_store::save(slot, p)) { sendError(500, "save failed"); return; }
-  if (slot == active_profile::slot()) active_profile::apply(*engine_);
+  if (slot == active_profile::slot() && (!had || memcmp(&old, &p, sizeof p) != 0)) active_profile::apply(*engine_);
   sendJson(200, "{\"ok\":true}");
 }
 

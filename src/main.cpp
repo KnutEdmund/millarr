@@ -18,14 +18,35 @@ SpeedEngine engine(kConfig);
 
 static uint32_t last_status_ms = 0;
 
-// True if the BOOT button (GPIO0) is already held at boot and stays held for 3 s.
-static bool bootButtonHeld() {
-  pinMode(0, INPUT_PULLUP);
-  for (int i = 0; i < 30; ++i) {
-    if (digitalRead(0) != LOW) return false;
-    delay(100);
+static uint32_t boot_ms = 0;
+static uint32_t boot_low_since_ms = 0;
+static bool boot_low = false;
+static bool boot_watch_done = false;
+
+// For the first 10 s after boot: holding BOOT (GPIO0) low for 3 s resets the
+// AP credentials to the config.h defaults and restarts the AP. The button is
+// only sampled after boot, so it never interferes with the ROM's strapping.
+static void watchBootButton() {
+  if (boot_watch_done) return;
+  const uint32_t now = millis();
+  if (now - boot_ms > 10000) {
+    boot_watch_done = true;
+    return;
   }
-  return true;
+  const bool low = digitalRead(0) == LOW;
+  if (low && !boot_low) {
+    boot_low = true;
+    boot_low_since_ms = now;
+  }
+  if (!low) boot_low = false;
+  if (low && now - boot_low_since_ms >= 3000) {
+    boot_watch_done = true;
+    profile_store::resetWifi();
+    Serial.println("wifi settings reset (BOOT held)");
+    String ssid, pass;
+    profile_store::loadWifi(ssid, pass);
+    wifi_ap::restart(ssid.c_str(), pass.c_str(), MDNS_HOSTNAME);
+  }
 }
 
 void setup() {
@@ -37,10 +58,8 @@ void setup() {
                 (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US, (unsigned long)STOP_TIMEOUT_US);
 
   profile_store::begin(BELT_LENGTH_M, MARKS_COUNT);
-  if (bootButtonHeld()) {
-    profile_store::resetWifi();
-    Serial.println("wifi settings reset (BOOT held)");
-  }
+  pinMode(0, INPUT_PULLUP);
+  boot_ms = millis();
   active_profile::apply(engine);
 
   pulse_isr::begin(SENSOR_DO_PIN, DEBOUNCE_US);
@@ -57,6 +76,7 @@ void loop() {
   while (pulse_isr::pop(t)) engine.onPulse(t);
 
   engine.tick(micros());
+  watchBootButton();
 
   web_server::handle();
 

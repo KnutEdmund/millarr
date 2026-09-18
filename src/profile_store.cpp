@@ -71,8 +71,8 @@ void begin(float default_belt_length_m, uint8_t default_marks) {
 }
 
 void loadWifi(String& ssid, String& pass) {
-  ssid = prefs.getString("ap_ssid", AP_SSID);
-  pass = prefs.getString("ap_pass", AP_PASSWORD);
+  ssid = prefs.isKey("ap_ssid") ? prefs.getString("ap_ssid") : String(AP_SSID);
+  pass = prefs.isKey("ap_pass") ? prefs.getString("ap_pass") : String(AP_PASSWORD);
 }
 
 void saveWifi(const String& ssid, const String& pass) {
@@ -81,8 +81,8 @@ void saveWifi(const String& ssid, const String& pass) {
 }
 
 void resetWifi() {
-  prefs.remove("ap_ssid");
-  prefs.remove("ap_pass");
+  if (prefs.isKey("ap_ssid")) prefs.remove("ap_ssid");
+  if (prefs.isKey("ap_pass")) prefs.remove("ap_pass");
 }
 
 }  // namespace profile_store
