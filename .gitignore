@@ -1,0 +1,7 @@
+.pio/
+.vscode/
+src/web_page.h
+*.pyc
+__pycache__/
+.DS_Store
+.superpowers/
