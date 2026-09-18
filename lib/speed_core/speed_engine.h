@@ -15,6 +15,10 @@ class SpeedEngine {
   // Feed one falling-edge timestamp (micros). Applies debounce and stop detection.
   void onPulse(uint32_t t_us);
 
+  // Called periodically (e.g. from loop()) so a long idle period is latched as
+  // stopped before a later micros() wrap could make running() resurrect.
+  void tick(uint32_t now_us);
+
   bool running(uint32_t now_us) const;
   // Revolution speed of the newest pulse, or 0 when stopped / not yet available.
   float speedAt(uint32_t now_us) const;

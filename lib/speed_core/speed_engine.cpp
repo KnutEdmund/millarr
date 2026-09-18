@@ -68,6 +68,13 @@ void SpeedEngine::onPulse(uint32_t t) {
   ++pulse_count_;
 }
 
+void SpeedEngine::tick(uint32_t now_us) {
+  if (has_last_ && (now_us - last_t_) > cfg_.stop_timeout_us) {
+    has_last_ = false;
+    startRun();  // zeroes last_rev_speed_ and the revolution window
+  }
+}
+
 void SpeedEngine::pushRevolutionStats(float rev_speed) {
   for (uint8_t m = 0; m < MAX_MARKS; ++m) rev_intervals_[stats_head_][m] = cur_rev_intervals_[m];
   rev_speeds_[stats_head_] = rev_speed;
@@ -93,6 +100,7 @@ EngineStatus SpeedEngine::status(uint32_t now_us) const {
   s.rejected_debounce = rejected_;
   s.stats_revolutions = stats_count_;
   s.log_size = static_cast<uint32_t>(log_.size());
+  s.log_capacity = static_cast<uint32_t>(log_.capacity());
   s.log_overwritten = log_.overwritten();
   s.last_seq = log_.lastSeq();
 

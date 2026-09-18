@@ -41,6 +41,7 @@ struct EngineStatus {
   float rev_speed_stddev;      // std dev of rev speed over the stats window (m/s)
   uint8_t stats_revolutions;   // revolutions currently in the stats window (0..STATS_REVOLUTIONS)
   uint32_t log_size;
+  uint32_t log_capacity;
   uint32_t log_overwritten;
   uint32_t last_seq;           // 0 when the log is empty
 };

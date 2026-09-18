@@ -31,7 +31,8 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, uint32_t isr_
                           (unsigned long)s.revolution_count, (unsigned long)s.rejected_debounce,
                           (unsigned long)isr_dropped);
   if (len < 0 || (size_t)len >= n) return len;
-  for (uint8_t m = 0; m < c.marks_count; ++m) {
+  const uint8_t n_marks = c.marks_count > MAX_MARKS ? MAX_MARKS : c.marks_count;
+  for (uint8_t m = 0; m < n_marks; ++m) {
     int k = std::snprintf(buf + len, n - len, "%s%.3f", m ? "," : "", (double)s.mark_share[m]);
     if (k < 0) return k;
     len += k;
@@ -39,11 +40,13 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, uint32_t isr_
   }
   int k = std::snprintf(buf + len, n - len,
                         "],\"rev_speed_stddev\":%.4f,\"stats_revolutions\":%u,"
-                        "\"log_size\":%lu,\"log_overwritten\":%lu,\"last_seq\":%lu,\"uptime_s\":%lu,"
+                        "\"log_size\":%lu,\"log_capacity\":%lu,\"log_overwritten\":%lu,"
+                        "\"last_seq\":%lu,\"uptime_s\":%lu,"
                         "\"config\":{\"belt_length_m\":%.3f,\"marks_count\":%u,"
                         "\"debounce_us\":%lu,\"stop_timeout_us\":%lu}}",
                         (double)s.rev_speed_stddev, (unsigned)s.stats_revolutions,
-                        (unsigned long)s.log_size, (unsigned long)s.log_overwritten,
+                        (unsigned long)s.log_size, (unsigned long)s.log_capacity,
+                        (unsigned long)s.log_overwritten,
                         (unsigned long)s.last_seq, (unsigned long)uptime_s, (double)c.belt_length_m,
                         (unsigned)c.marks_count, (unsigned long)c.debounce_us,
                         (unsigned long)c.stop_timeout_us);

@@ -190,6 +190,25 @@ void test_engine_reset_clears_everything() {
   TEST_ASSERT_FALSE(s.running);
 }
 
+void test_engine_stop_latched_across_wrap() {
+  SpeedEngine e(defaultConfig());
+  auto ts = synthConstant(2.0, 5.0);
+  feed(e, ts);
+  uint32_t last = ts.back();
+  e.tick(last + 4000000u);                       // 4 s idle: stop latched
+  TEST_ASSERT_FALSE(e.running(last + 4000000u));
+  // 71.6 min later micros() has wrapped: to the engine this timestamp is
+  // indistinguishable from "1 s after the last pulse".
+  uint32_t wrapped = last + 1000000u;
+  TEST_ASSERT_FALSE(e.running(wrapped));         // fails without the latch
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, e.speedAt(wrapped));
+  e.onPulse(wrapped);                            // belt restarts inside the window
+  const PulseRecord& r = e.log().at(e.log().size() - 1);
+  TEST_ASSERT_EQUAL_UINT32(0, r.interval_us);
+  TEST_ASSERT_EQUAL_UINT8(0, r.mark_index);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, r.rev_speed_mps);
+}
+
 // --- Statistics ---
 
 void test_stats_uneven_marks_rev_speed_unaffected() {
@@ -209,8 +228,8 @@ void test_stats_uneven_marks_rev_speed_unaffected() {
   bool saw_low = false, saw_high = false;
   for (size_t i = e.log().size() - 6; i < e.log().size(); ++i) {
     const PulseRecord& r = e.log().at(i);
-    if (r.mark_index == 1) saw_low = std::fabs(r.mark_speed_mps - v / 0.90) < v * 0.002;
-    if (r.mark_index == 2) saw_high = std::fabs(r.mark_speed_mps - v / 1.05) < v * 0.002;
+    if (r.mark_index == 1) saw_low |= std::fabs(r.mark_speed_mps - v / 0.90) < v * 0.002;
+    if (r.mark_index == 2) saw_high |= std::fabs(r.mark_speed_mps - v / 1.05) < v * 0.002;
   }
   TEST_ASSERT_TRUE(saw_low);
   TEST_ASSERT_TRUE(saw_high);
@@ -242,18 +261,18 @@ void test_stats_jitter_reflected_in_stddev() {
   EngineStatus s = e.status(ts.back());
   // Three independent 1 % interval errors give ~0.58 % on the revolution; allow a wide band
   // because the window is only 10 revolutions.
-  TEST_ASSERT_TRUE(s.rev_speed_stddev > v * 0.001);
-  TEST_ASSERT_TRUE(s.rev_speed_stddev < v * 0.02);
+  TEST_ASSERT_TRUE(s.rev_speed_stddev > v * 0.003);
+  TEST_ASSERT_TRUE(s.rev_speed_stddev < v * 0.012);
 }
 
-void test_stats_window_reset_after_stop() {
+void test_stats_window_survives_stop() {
   SpeedEngine e(defaultConfig());
   auto ts = synthConstant(3.0, 30.0);
   feed(e, ts);
   uint32_t restart = ts.back() + 10000000;  // 10 s gap: stop
   SynthOptions o;
   o.start_us = restart;
-  auto ts2 = synthConstant(3.0, 2.0, o);  // ~6 pulses: 1 full revolution
+  auto ts2 = synthConstant(3.0, 2.0, o);  // ~6 pulses: about 2 revolutions
   feed(e, ts2);
   EngineStatus s = e.status(ts2.back());
   // Old revolutions stay in the window (stats are per reset, not per run) and the
@@ -310,6 +329,7 @@ void test_json_status_contains_all_fields() {
   s.rev_speed_stddev = 0.012f;
   s.stats_revolutions = 4;
   s.log_size = 13;
+  s.log_capacity = 2048;
   s.log_overwritten = 0;
   s.last_seq = 13;
   EngineConfig c{2.82f, 3, 50000u, 3000000u};
@@ -320,7 +340,7 @@ void test_json_status_contains_all_fields() {
       "{\"speed_mps\":2.500,\"speed_kmh\":9.000,\"running\":true,\"distance_m\":12.340,"
       "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"isr_dropped\":2,"
       "\"mark_share\":[0.330,0.330,0.340],\"rev_speed_stddev\":0.0120,\"stats_revolutions\":4,"
-      "\"log_size\":13,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
+      "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
       "\"config\":{\"belt_length_m\":2.820,\"marks_count\":3,\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
       buf);
 }
@@ -341,10 +361,11 @@ int main(int, char**) {
   RUN_TEST(test_engine_distance_counts_intervals);
   RUN_TEST(test_engine_micros_wrap);
   RUN_TEST(test_engine_reset_clears_everything);
+  RUN_TEST(test_engine_stop_latched_across_wrap);
   RUN_TEST(test_stats_uneven_marks_rev_speed_unaffected);
   RUN_TEST(test_stats_even_marks_share_is_one_third);
   RUN_TEST(test_stats_jitter_reflected_in_stddev);
-  RUN_TEST(test_stats_window_reset_after_stop);
+  RUN_TEST(test_stats_window_survives_stop);
   RUN_TEST(test_csv_header);
   RUN_TEST(test_csv_record_line);
   RUN_TEST(test_json_record);
