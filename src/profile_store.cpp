@@ -24,6 +24,8 @@ bool load(uint8_t slot, Profile& out) {
   if (slot >= MAX_PROFILES) return false;
   const char* key = slotKey(slot);
   if (!prefs.isKey(key)) return false;
+  // A size mismatch also covers blobs saved by an older, smaller Profile layout
+  // (e.g. the 60-byte v1 struct): they are treated as empty slots, no migration.
   if (prefs.getBytesLength(key) != sizeof(Profile)) return false;
   prefs.getBytes(key, &out, sizeof out);
   return speed_core::validate(out) == nullptr;

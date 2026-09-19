@@ -38,12 +38,8 @@ void sendError(int code, const char* msg) {
   sendJson(code, b);
 }
 
-// Path argument 0 must be a single digit 0..7.
 bool parseSlot(uint8_t& slot) {
-  const String s = server.pathArg(0);
-  if (s.length() != 1 || s[0] < '0' || s[0] > '7') return false;
-  slot = static_cast<uint8_t>(s[0] - '0');
-  return true;
+  return speed_core::parseSlot(server.pathArg(0).c_str(), slot);
 }
 
 void handleRoot() {
@@ -149,11 +145,12 @@ void handleSignal() {
 void handleProfilesList() {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "application/json", "");
-  char head[40];
-  snprintf(head, sizeof head, "{\"active\":%u,\"profiles\":[", (unsigned)active_profile::slot());
+  char head[48];
+  snprintf(head, sizeof head, "{\"active\":%u,\"max\":%u,\"profiles\":[", (unsigned)active_profile::slot(),
+           (unsigned)speed_core::MAX_PROFILES);
   server.sendContent(head);
   bool first = true;
-  char buf[256];
+  char buf[512];
   Profile p;
   for (uint8_t s = 0; s < speed_core::MAX_PROFILES; ++s) {
     if (!profile_store::load(s, p)) continue;
@@ -175,6 +172,9 @@ void handleProfileSave() {
   name.trim();
   if (name.length() >= speed_core::PROFILE_NAME_LEN) { sendError(400, "name too long"); return; }
   strncpy(p.name, name.c_str(), speed_core::PROFILE_NAME_LEN - 1);
+  String notes = server.hasArg("notes") ? server.arg("notes") : "";
+  if (notes.length() >= speed_core::PROFILE_NOTES_LEN) { sendError(400, "notes too long"); return; }
+  strncpy(p.notes, notes.c_str(), speed_core::PROFILE_NOTES_LEN - 1);
   if (!speed_core::parseTypeName(server.arg("type").c_str(), p.type)) { sendError(400, "bad type"); return; }
   long marks = server.arg("marks").toInt();
   if (marks < 1 || marks > speed_core::MAX_MARKS) { sendError(400, "marks must be 1..8"); return; }
