@@ -20,7 +20,7 @@
   button.primary { background: #1e5a7a; }
   button.danger { background: #5a2323; }
   button:disabled { opacity: 0.5; cursor: default; }
-  input, select { background: #2a2a2a; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.95rem; width: 100%; box-sizing: border-box; }
+  input, select, textarea { background: #2a2a2a; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 0.4rem 0.5rem; font-size: 0.95rem; width: 100%; box-sizing: border-box; font-family: inherit; }
   .field { margin-bottom: 0.6rem; }
   .dist { display: grid; grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); gap: 0.5rem; }
   .msg { min-height: 1.2rem; font-size: 0.85rem; }
@@ -33,13 +33,13 @@
 <body>
 <h1>Settings <small><a href="/">← back to sensor</a></small></h1>
 
-<h2>Treadmill profiles</h2>
+<h2 style="display:flex;align-items:center;gap:0.75rem">Treadmill profiles <button id="add" class="primary" disabled style="margin-left:auto">Add profile</button></h2>
 <div id="profiles"></div>
-<div class="row"><button id="add" class="primary" disabled>Add profile</button><span class="msg" id="pmsg"></span></div>
+<div class="row"><span class="msg" id="pmsg"></span></div>
 
 <div class="card" id="editor" hidden>
   <div class="label" id="editorTitle">Edit profile</div>
-  <div class="field"><div class="label">Name</div><input id="fName" maxlength="23" placeholder="e.g. Gym treadmill A"></div>
+  <div class="field"><div class="label">Name</div><input id="fName" maxlength="47" placeholder="e.g. Gym treadmill A"></div>
   <div class="row">
     <div class="field grow"><div class="label">Type</div>
       <select id="fType"><option value="belt">Belt (painted marks)</option><option value="slats">Slats (not supported yet)</option></select></div>
@@ -48,6 +48,7 @@
   <div class="label">Distance from each mark to the next (m)</div>
   <div class="dist" id="fDist"></div>
   <div class="label" style="margin-top:0.4rem">Belt length: <span id="fSum">–</span> m</div>
+  <div class="field"><div class="label">Notes</div><textarea id="fNotes" maxlength="127" rows="3" placeholder="Where it is, model, quirks…"></textarea></div>
   <div class="row" style="margin-top:0.6rem"><button id="save" class="primary">Save</button><button id="cancel">Cancel</button><span class="msg" id="emsg"></span></div>
 </div>
 
@@ -67,6 +68,7 @@ const $ = id => document.getElementById(id);
 let profiles = [];
 let active = 0;
 let editingId = null;
+let maxProfiles = 8;
 
 function msg(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); }
 
@@ -79,20 +81,21 @@ async function post(url, fields) {
 
 async function loadProfiles() {
   const d = await (await fetch('/api/profiles')).json();
-  profiles = d.profiles; active = d.active;
+  profiles = d.profiles; active = d.active; maxProfiles = d.max || maxProfiles;
   const el = $('profiles');
   el.innerHTML = '';
   for (const p of profiles) {
     const c = document.createElement('div');
     c.className = 'card' + (p.id === active ? ' active' : '');
     c.innerHTML = `<div class="row"><div class="grow"><strong>${esc(p.name)}</strong>${p.id === active ? '<span class="badge">ACTIVE</span>' : ''}
-      <div class="label">${p.type} · ${p.marks} mark${p.marks > 1 ? 's' : ''} · belt ${p.belt_length_m.toFixed(3)} m · ${p.mark_distance_m.map(v => v.toFixed(3)).join(' / ')}</div></div>
+      <div class="label">${p.type} · ${p.marks} mark${p.marks > 1 ? 's' : ''} · belt ${p.belt_length_m.toFixed(3)} m · ${p.mark_distance_m.map(v => v.toFixed(3)).join(' / ')}</div>
+      ${p.notes ? `<div class="label" style="white-space:pre-wrap">${esc(p.notes)}</div>` : ''}</div>
       <button data-act="edit" data-id="${p.id}">Edit</button>
       <button data-act="activate" data-id="${p.id}" ${p.id === active ? 'disabled' : ''}>Activate</button>
       <button data-act="delete" data-id="${p.id}" class="danger" ${p.id === active ? 'disabled' : ''}>Delete</button></div>`;
     el.appendChild(c);
   }
-  $('add').disabled = profiles.length >= 8;
+  $('add').disabled = profiles.length >= maxProfiles;
 }
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -125,6 +128,7 @@ function openEditor(p, id) {
   $('fType').value = p ? p.type : 'belt';
   $('fMarks').value = p ? p.marks : 3;
   renderDist(p ? p.mark_distance_m : null);
+  $('fNotes').value = p ? p.notes : '';
   msg($('emsg'), '', true);
   $('editor').hidden = false;
   $('fName').focus();
@@ -148,15 +152,15 @@ $('profiles').onclick = async e => {
 
 $('add').onclick = () => {
   const used = new Set(profiles.map(p => p.id));
-  let id = 0; while (used.has(id) && id < 8) id++;
-  if (id >= 8) { msg($('pmsg'), 'All 8 slots are used', false); return; }
+  let id = 0; while (used.has(id) && id < maxProfiles) id++;
+  if (id >= maxProfiles) { msg($('pmsg'), `All ${maxProfiles} slots are used`, false); return; }
   openEditor(null, id);
 };
 
 $('cancel').onclick = () => { $('editor').hidden = true; editingId = null; };
 
 $('save').onclick = async () => {
-  const fields = { name: $('fName').value.trim(), type: $('fType').value, marks: $('fMarks').value };
+  const fields = { name: $('fName').value.trim(), type: $('fType').value, marks: $('fMarks').value, notes: $('fNotes').value };
   document.querySelectorAll('#fDist input').forEach(i => fields[i.id] = i.value);
   try {
     await post(`/api/profiles/${editingId}`, fields);
@@ -181,7 +185,12 @@ $('wSave').onclick = async () => {
   } catch (err) { msg($('wmsg'), err.message, false); }
 };
 
-loadProfiles().catch(() => { $('add').disabled = true; msg($('pmsg'), 'offline', false); });
+loadProfiles().then(() => {
+  if (location.hash === '#new') {
+    $('add').click();
+    history.replaceState(null, '', location.pathname);
+  }
+}).catch(() => { $('add').disabled = true; msg($('pmsg'), 'offline', false); });
 loadSettings();
 </script>
 </body>
