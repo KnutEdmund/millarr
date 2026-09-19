@@ -39,9 +39,11 @@ pio device monitor            # serial status line, 115200 baud
    `http://treadmill.local/`) **with the `http://` prefix typed explicitly** — phone
    browsers otherwise try to upgrade the address to HTTPS, which the sensor does not
    serve.
-3. Open **Settings** to create a profile per treadmill (name, marks, measured
-   distance between marks) and to change the sensor's Wi-Fi name and password. The
-   active profile survives power cycles.
+3. Open **Settings** to create a profile per treadmill — up to 20 — with a name,
+   optional notes (location, model, quirks), marks, and the measured distance
+   between marks; a "+ New profile" button on both pages jumps straight to a blank
+   profile form. Also change the sensor's Wi-Fi name and password here. The active
+   profile survives power cycles.
 4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
 
 ## Layout

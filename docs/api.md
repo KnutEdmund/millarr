@@ -11,8 +11,8 @@ Base URL: `http://192.168.4.1` (or `http://treadmill.local`) on the sensor's acc
 | GET | `/api/pulses.csv` | Whole log as CSV download |
 | GET | `/api/signal` | 200 ms ADC capture of the sensor's analog output |
 | POST | `/api/reset` | Clears log, distance and counters; `{"ok":true}` |
-| GET | `/api/profiles` | All stored profiles and the active id |
-| POST | `/api/profiles/{id}` | Create or replace profile `id` (0–7); form fields `name`, `type` (`belt`/`slats`), `marks` (1–8), `d0`…`d{marks-1}` (metres) |
+| GET | `/api/profiles` | All stored profiles, the active id and the maximum slot count |
+| POST | `/api/profiles/{id}` | Create or replace profile `id` (0–19); form fields `name`, `type` (`belt`/`slats`), `marks` (1–8), `d0`…`d{marks-1}` (metres), optional `notes` |
 | POST | `/api/profiles/{id}/activate` | Make `id` the active profile; the engine is reconfigured immediately |
 | POST | `/api/profiles/{id}/delete` | Delete `id`; refused for the active profile and for the last remaining one |
 | GET | `/api/settings` | `{"ap_ssid":"…","mdns":"treadmill"}` |
@@ -33,9 +33,11 @@ JSON parser. On success the response is `{"ok":true}` (`/api/settings/wifi` adds
 is the currently active profile; saving a different slot just writes it to NVS.
 
 Errors from `/api/profiles/{id}`, in the order they are checked: `bad profile id`
-(id isn't a single digit 0–7), `name too long`, `bad type` (not `belt` or `slats`),
-`marks must be 1..8`, `missing distance` (a `d0`…`d{marks-1}` field is absent), any
-`validate()` reason below, then `save failed` (`500`, NVS write failed).
+(id isn't `0`–`19`), `name too long`, `notes too long` (`notes`, if given, is
+≥ 127 bytes), `bad type` (not `belt` or `slats`), `marks must be 1..8`,
+`missing distance` (a `d0`…`d{marks-1}` field is absent), any `validate()` reason
+below (including `notes has invalid characters`), then `save failed` (`500`, NVS
+write failed).
 `/api/profiles/{id}/activate`: `bad profile id`, `empty profile` (no profile stored
 in that slot). `/api/profiles/{id}/delete`: `bad profile id`,
 `cannot delete active profile`, `empty profile`, `at least one profile` (refuses to
@@ -99,15 +101,21 @@ Capture blocks the main loop for 200 ms; the ISR ring absorbs pulses meanwhile.
 
 ## Profile
 
-A profile describes one treadmill: a name, a type, and the distance from each mark
-to the next.
+A profile describes one treadmill: a name, freeform notes, a type, and the distance
+from each mark to the next. Profile version 2 (60-byte v1 blobs from before this
+field existed are rejected and treated as empty slots; see `LEDGER.md`).
 
 ```json
-{"id":0,"name":"Home treadmill","type":"belt","marks":3,
+{"id":0,"name":"Home treadmill","notes":"","type":"belt","marks":3,
  "mark_distance_m":[0.940,0.940,0.940],"belt_length_m":2.820}
 ```
 
-- `name`: 1–23 bytes, no `"` or `\`.
+`GET /api/profiles` wraps a list of these under `{"active":N,"max":20,"profiles":[…]}`;
+`max` is the number of usable slots (`MAX_PROFILES`, ids 0–19).
+
+- `name`: 1–47 bytes, no `"` or `\`.
+- `notes`: 0–127 bytes, optional, no `"` or `\`; newlines (`\n`) are allowed and are
+  escaped as `\n` (two characters) in the JSON string.
 - `type`: `"belt"` or `"slats"` (slats is representable but not implemented).
 - `marks`: 1–8.
 - `mark_distance_m[k]`: distance from mark `k` to mark `k+1` (wrapping to mark 0
@@ -116,5 +124,5 @@ to the next.
 
 `validate()` checks a profile before it is saved or applied and returns one of these
 reasons verbatim in `{"error":"…"}`: `bad version`, `marks must be 1..8`,
-`name empty`, `name too long`, `name has invalid characters`, `bad type`,
-`distance out of range`.
+`name empty`, `name too long`, `name has invalid characters`, `notes too long`,
+`notes has invalid characters`, `bad type`, `distance out of range`.

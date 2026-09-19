@@ -2,6 +2,11 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-19 (profiles)
+
+- **Profile v2: 212-byte blob (name 48, notes 128); v1 blobs are treated as empty
+  slots, no migration (pre-release data only). MAX_PROFILES raised to 20.**
+
 ## 2026-09-18 (profiles)
 
 - **Per-mark distances replace equal spacing**; belt length is always the sum.
