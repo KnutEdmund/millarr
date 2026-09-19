@@ -8,9 +8,10 @@
 
 namespace speed_core {
 
-constexpr uint8_t PROFILE_VERSION = 1;
-constexpr uint8_t MAX_PROFILES = 8;
-constexpr uint8_t PROFILE_NAME_LEN = 24;  // including the terminating NUL
+constexpr uint8_t PROFILE_VERSION = 2;
+constexpr uint8_t MAX_PROFILES = 20;
+constexpr uint8_t PROFILE_NAME_LEN = 48;   // including the terminating NUL
+constexpr uint8_t PROFILE_NOTES_LEN = 128; // including the terminating NUL
 constexpr float MIN_MARK_DISTANCE_M = 0.05f;
 constexpr float MAX_MARK_DISTANCE_M = 10.0f;
 
@@ -22,6 +23,7 @@ struct Profile {
   TreadmillType type;
   uint8_t marks;                       // 1..MAX_MARKS
   float mark_distance_m[MAX_MARKS];    // [k] = distance from mark k to mark k+1 (mod marks)
+  char notes[PROFILE_NOTES_LEN];       // UTF-8, NUL-terminated; may contain '\n'
 };
 
 // Sum of mark_distance_m[0..marks).
@@ -37,5 +39,11 @@ bool parseTypeName(const char* s, TreadmillType& out);
 
 // 1..max_len_incl_nul-1 bytes, each >= 0x20, not '"' and not '\\'. UTF-8 bytes >= 0x80 pass.
 bool validName(const char* s, size_t max_len_incl_nul);
+
+// Like validName but newline (0x0A) is allowed. Empty is allowed (returns true for "").
+bool validNotes(const char* s, size_t max_len_incl_nul);
+
+// Parses a 1-2 digit slot id ("0".."19", no leading zeros except "0"); false otherwise or if >= MAX_PROFILES.
+bool parseSlot(const char* s, uint8_t& out);
 
 }  // namespace speed_core

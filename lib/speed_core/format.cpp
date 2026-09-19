@@ -3,6 +3,20 @@
 #include <cstdio>
 
 namespace {
+// Appends `s` with '\n' escaped as "\\n" (no other escaping needed: '"' and '\\' are
+// rejected by validation). Returns the snprintf-style length.
+int appendJsonString(const char* s, char* buf, size_t n, int len) {
+  if (len < 0 || (size_t)len >= n) return len;
+  for (const char* p = s; *p != '\0'; ++p) {
+    if ((size_t)len >= n) return len;
+    int k = *p == '\n' ? std::snprintf(buf + len, n - len, "\\n")
+                        : std::snprintf(buf + len, n - len, "%c", *p);
+    if (k < 0) return k;
+    len += k;
+  }
+  return len;
+}
+
 // Appends "[d0,d1,...]" for the first `count` distances. Returns total length like snprintf.
 int appendDistances(const float* d, uint8_t count, char* buf, size_t n, int len) {
   if (len < 0 || (size_t)len >= n) return len;
@@ -83,11 +97,16 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, const StatusE
 
 int formatProfileJson(const Profile& p, uint8_t id, char* buf, size_t n) {
   const uint8_t marks = p.marks > MAX_MARKS ? MAX_MARKS : p.marks;
-  int len = std::snprintf(buf, n, "{\"id\":%u,\"name\":\"%s\",\"type\":\"%s\",\"marks\":%u,\"mark_distance_m\":",
-                          (unsigned)id, p.name, typeName(p.type), (unsigned)marks);
+  int len = std::snprintf(buf, n, "{\"id\":%u,\"name\":\"%s\",\"notes\":\"", (unsigned)id, p.name);
+  len = appendJsonString(p.notes, buf, n, len);
+  if (len < 0 || (size_t)len >= n) return len;
+  int k = std::snprintf(buf + len, n - len, "\",\"type\":\"%s\",\"marks\":%u,\"mark_distance_m\":",
+                        typeName(p.type), (unsigned)marks);
+  if (k < 0) return k;
+  len += k;
   len = appendDistances(p.mark_distance_m, marks, buf, n, len);
   if (len < 0 || (size_t)len >= n) return len;
-  int k = std::snprintf(buf + len, n - len, ",\"belt_length_m\":%.3f}", (double)beltLength(p));
+  k = std::snprintf(buf + len, n - len, ",\"belt_length_m\":%.3f}", (double)beltLength(p));
   if (k < 0) return k;
   return len + k;
 }

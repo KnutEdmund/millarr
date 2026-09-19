@@ -356,7 +356,19 @@ void test_json_profile() {
   int n = formatProfileJson(p, 0, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
   TEST_ASSERT_EQUAL_STRING(
-      "{\"id\":0,\"name\":\"Home treadmill\",\"type\":\"belt\",\"marks\":3,"
+      "{\"id\":0,\"name\":\"Home treadmill\",\"notes\":\"\",\"type\":\"belt\",\"marks\":3,"
+      "\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820}",
+      buf);
+}
+
+void test_json_profile_notes_newline_escaped() {
+  Profile p = makeDefaultProfile("Home treadmill", 2.82f, 3);
+  std::strcpy(p.notes, "first\nsecond");
+  char buf[256];
+  int n = formatProfileJson(p, 0, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"id\":0,\"name\":\"Home treadmill\",\"notes\":\"first\\nsecond\",\"type\":\"belt\",\"marks\":3,"
       "\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820}",
       buf);
 }
@@ -520,12 +532,35 @@ void test_profile_validate_rejects_bad_values() {
   q = p; q.mark_distance_m[1] = 0.01f;     TEST_ASSERT_EQUAL_STRING("distance out of range", validate(q));
   q = p; q.mark_distance_m[2] = 11.0f;     TEST_ASSERT_EQUAL_STRING("distance out of range", validate(q));
   q = p; q.name[0] = '\0';                 TEST_ASSERT_EQUAL_STRING("name empty", validate(q));
-  q = p; q.version = 2;                    TEST_ASSERT_EQUAL_STRING("bad version", validate(q));
+  q = p; q.version = 1;                    TEST_ASSERT_EQUAL_STRING("bad version", validate(q));
   q = p; q.name[0] = '"';                  TEST_ASSERT_EQUAL_STRING("name has invalid characters", validate(q));
   q = p; q.type = static_cast<TreadmillType>(7); TEST_ASSERT_EQUAL_STRING("bad type", validate(q));
   q = p; memset(q.name, 'a', PROFILE_NAME_LEN);  TEST_ASSERT_EQUAL_STRING("name too long", validate(q));
   // Distances beyond `marks` are ignored by validation.
   q = p; q.mark_distance_m[5] = 99.0f;     TEST_ASSERT_NULL(validate(q));
+  q = p; memset(q.notes, 'x', PROFILE_NOTES_LEN);  TEST_ASSERT_EQUAL_STRING("notes too long", validate(q));
+  q = p; std::strcpy(q.notes, "a\"b");     TEST_ASSERT_EQUAL_STRING("notes has invalid characters", validate(q));
+  q = p; std::strcpy(q.notes, "line1\nline2"); TEST_ASSERT_NULL(validate(q));
+  q = p; memset(q.name, 'a', 47); q.name[47] = '\0'; TEST_ASSERT_NULL(validate(q));
+}
+
+void test_profile_parse_slot() {
+  uint8_t out;
+  TEST_ASSERT_TRUE(parseSlot("0", out));  TEST_ASSERT_EQUAL_UINT8(0, out);
+  TEST_ASSERT_TRUE(parseSlot("7", out));  TEST_ASSERT_EQUAL_UINT8(7, out);
+  TEST_ASSERT_TRUE(parseSlot("19", out)); TEST_ASSERT_EQUAL_UINT8(19, out);
+  TEST_ASSERT_FALSE(parseSlot("20", out));
+  TEST_ASSERT_FALSE(parseSlot("", out));
+  TEST_ASSERT_FALSE(parseSlot("07", out));
+  TEST_ASSERT_FALSE(parseSlot("1a", out));
+  TEST_ASSERT_FALSE(parseSlot("-1", out));
+  TEST_ASSERT_FALSE(parseSlot("100", out));
+}
+
+void test_profile_constants() {
+  TEST_ASSERT_EQUAL_UINT8(20, MAX_PROFILES);
+  TEST_ASSERT_EQUAL_UINT8(2, PROFILE_VERSION);
+  TEST_ASSERT_EQUAL_UINT32(212, sizeof(Profile));
 }
 
 void test_profile_belt_length_sums_only_used_marks() {
@@ -591,6 +626,8 @@ int main(int, char**) {
   RUN_TEST(test_stats_window_cleared_when_phase_changes_after_restart);
   RUN_TEST(test_profile_default_is_valid_and_equal);
   RUN_TEST(test_profile_validate_rejects_bad_values);
+  RUN_TEST(test_profile_parse_slot);
+  RUN_TEST(test_profile_constants);
   RUN_TEST(test_profile_belt_length_sums_only_used_marks);
   RUN_TEST(test_profile_make_engine_config);
   RUN_TEST(test_profile_type_names);
@@ -599,6 +636,7 @@ int main(int, char**) {
   RUN_TEST(test_json_record);
   RUN_TEST(test_json_status_contains_all_fields);
   RUN_TEST(test_json_profile);
+  RUN_TEST(test_json_profile_notes_newline_escaped);
   RUN_TEST(test_json_status_truncation_is_reported);
   return UNITY_END();
 }

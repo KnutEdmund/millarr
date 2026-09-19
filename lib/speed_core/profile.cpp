@@ -22,6 +22,34 @@ bool validName(const char* s, size_t max_len_incl_nul) {
   return true;
 }
 
+bool validNotes(const char* s, size_t max_len_incl_nul) {
+  size_t len = 0;
+  while (len < max_len_incl_nul && s[len] != '\0') ++len;
+  if (len >= max_len_incl_nul) return false;
+  if (len == 0) return true;
+  for (size_t i = 0; i < len; ++i) {
+    const unsigned char c = static_cast<unsigned char>(s[i]);
+    if (c == '\n') continue;
+    if (c < 0x20 || c == '"' || c == '\\') return false;
+  }
+  return true;
+}
+
+bool parseSlot(const char* s, uint8_t& out) {
+  size_t len = 0;
+  while (s[len] != '\0') ++len;
+  if (len == 0 || len > 2) return false;
+  if (len == 2 && s[0] == '0') return false;  // no leading zeros except "0" itself
+  for (size_t i = 0; i < len; ++i) {
+    if (s[i] < '0' || s[i] > '9') return false;
+  }
+  unsigned v = 0;
+  for (size_t i = 0; i < len; ++i) v = v * 10 + (s[i] - '0');
+  if (v >= MAX_PROFILES) return false;
+  out = static_cast<uint8_t>(v);
+  return true;
+}
+
 const char* validate(const Profile& p) {
   if (p.version != PROFILE_VERSION) return "bad version";
   if (p.marks < 1 || p.marks > MAX_MARKS) return "marks must be 1..8";
@@ -30,6 +58,10 @@ const char* validate(const Profile& p) {
   if (len == 0) return "name empty";
   if (len >= PROFILE_NAME_LEN) return "name too long";
   if (!validName(p.name, PROFILE_NAME_LEN)) return "name has invalid characters";
+  size_t notes_len = 0;
+  while (notes_len < PROFILE_NOTES_LEN && p.notes[notes_len] != '\0') ++notes_len;
+  if (notes_len >= PROFILE_NOTES_LEN) return "notes too long";
+  if (notes_len > 0 && !validNotes(p.notes, PROFILE_NOTES_LEN)) return "notes has invalid characters";
   if (p.type != TreadmillType::Belt && p.type != TreadmillType::Slats) return "bad type";
   for (uint8_t k = 0; k < p.marks; ++k) {
     const float d = p.mark_distance_m[k];
