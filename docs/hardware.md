@@ -57,3 +57,11 @@ status lines before settling into clean output — a `pio device monitor` or
 `scripts/serial_capture.py` artifact of attaching to an already-running UART, not a
 firmware fault. Reset the board (or start the capture before powering it) if a clean
 log from boot is needed.
+
+Boards without a BOOT button: GPIO0 is exposed on the pin header (labelled `0`, `D0` or
+`IO0`). Touching a jumper wire from **GND** to that pin for 3 seconds within 10 seconds
+after a reset does exactly the same thing.
+
+Over USB, without touching the board: `scripts/wifi_reset.py` resets the board through
+the RTS line and pulls GPIO0 low through the DTR line, then confirms the log message.
+This is the same mechanism the flasher uses.
