@@ -52,6 +52,17 @@
   <div class="row" style="margin-top:0.6rem"><button id="save" class="primary">Save</button><button id="cancel">Cancel</button><span class="msg" id="emsg"></span></div>
 </div>
 
+<h2>Backup</h2>
+<div class="card">
+  <div class="row">
+    <button id="backup">Download backup</button>
+    <button id="restoreBtn">Restore backup…</button>
+    <input type="file" id="restoreFile" accept="application/json,.json" hidden>
+    <span class="msg" id="bmsg"></span>
+  </div>
+  <div class="label" style="margin-top:0.4rem">The backup holds all profiles (names, notes, marks, distances) and which one is active. Wi-Fi settings are not included. Restoring merges by slot id and overwrites profiles in the same slots.</div>
+</div>
+
 <h2>Wi-Fi access point</h2>
 <div class="card">
   <div class="field"><div class="label">Network name (SSID)</div><input id="wSsid" maxlength="32"></div>
@@ -173,6 +184,105 @@ $('save').onclick = async () => {
 async function loadSettings() {
   try { const s = await (await fetch('/api/settings')).json(); $('wSsid').value = s.ap_ssid; } catch (e) { msg($('wmsg'), 'offline', false); }
 }
+
+$('backup').onclick = async () => {
+  try {
+    const d = await (await fetch('/api/profiles')).json();
+    const exported_at = new Date().toISOString();
+    const out = {
+      format: 'millarr-profiles',
+      version: 1,
+      exported_at,
+      active: d.active,
+      profiles: d.profiles.map(p => ({ id: p.id, name: p.name, notes: p.notes, type: p.type, marks: p.marks, mark_distance_m: p.mark_distance_m }))
+    };
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `treadmill-profiles-${exported_at.slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    msg($('bmsg'), `Backup downloaded (${out.profiles.length} profiles)`, true);
+  } catch (err) { msg($('bmsg'), 'offline', false); }
+};
+
+$('restoreBtn').onclick = () => $('restoreFile').click();
+
+function validateBackup(data) {
+  if (!data || typeof data !== 'object') return { ok: false, reason: 'not an object' };
+  if (data.format !== 'millarr-profiles') return { ok: false, reason: 'format' };
+  if (data.version !== 1) return { ok: false, reason: 'version' };
+  if (!Array.isArray(data.profiles)) return { ok: false, reason: 'profiles' };
+  if (data.profiles.length > maxProfiles) return { ok: false, reason: 'too many profiles' };
+  const seen = new Set();
+  for (let i = 0; i < data.profiles.length; i++) {
+    const p = data.profiles[i];
+    const label = p && Number.isInteger(p.id) ? p.id : i;
+    if (!p || typeof p !== 'object') return { ok: false, reason: `profile ${label} not an object` };
+    if (!Number.isInteger(p.id) || p.id < 0 || p.id >= maxProfiles) return { ok: false, reason: `profile ${label} bad id` };
+    if (seen.has(p.id)) return { ok: false, reason: `profile ${label} duplicate id` };
+    seen.add(p.id);
+    if (typeof p.name !== 'string' || p.name.length === 0 || p.name.length > 47) return { ok: false, reason: `profile ${label} name` };
+    const notes = p.notes === undefined ? '' : p.notes;
+    if (typeof notes !== 'string' || notes.length > 127) return { ok: false, reason: `profile ${label} notes` };
+    if (p.type !== 'belt' && p.type !== 'slats') return { ok: false, reason: `profile ${label} type` };
+    if (!Number.isInteger(p.marks) || p.marks < 1 || p.marks > 8) return { ok: false, reason: `profile ${label} marks` };
+    if (!Array.isArray(p.mark_distance_m) || p.mark_distance_m.length !== p.marks || !p.mark_distance_m.every(v => typeof v === 'number' && Number.isFinite(v))) {
+      return { ok: false, reason: `profile ${label} mark_distance_m` };
+    }
+  }
+  return { ok: true };
+}
+
+$('restoreFile').onchange = async () => {
+  const file = $('restoreFile').files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    let data;
+    try { data = JSON.parse(text); } catch (e) { msg($('bmsg'), 'Not a valid JSON file', false); $('restoreFile').value = ''; return; }
+    const v = validateBackup(data);
+    if (!v.ok) { msg($('bmsg'), `Invalid backup: ${v.reason}`, false); $('restoreFile').value = ''; return; }
+
+    const existing = new Set(profiles.map(p => p.id));
+    const newIds = data.profiles.filter(p => !existing.has(p.id)).map(p => p.id);
+    const overwriteIds = data.profiles.filter(p => existing.has(p.id)).map(p => p.id);
+    const lines = [`Restore ${data.profiles.length} profile(s) from backup?`, ''];
+    if (newIds.length) lines.push(`New: ${newIds.join(', ')}`);
+    if (overwriteIds.length) lines.push(`Overwrite: ${overwriteIds.join(', ')}`);
+    lines.push('', 'Profiles not in the backup are kept.');
+    if (!confirm(lines.join('\n'))) { $('restoreFile').value = ''; return; }
+
+    let count = 0;
+    try {
+      for (const p of data.profiles) {
+        const fields = { name: p.name, type: p.type, marks: p.marks, notes: p.notes === undefined ? '' : p.notes };
+        p.mark_distance_m.forEach((d, k) => { fields['d' + k] = d.toFixed(4); });
+        await post(`/api/profiles/${p.id}`, fields);
+        count++;
+      }
+    } catch (err) {
+      const failedId = data.profiles[count].id;
+      msg($('bmsg'), `Restore stopped at profile ${failedId}: ${err.message}`, false);
+      $('restoreFile').value = '';
+      return;
+    }
+
+    if (Number.isInteger(data.active) && data.profiles.some(p => p.id === data.active)) {
+      await post(`/api/profiles/${data.active}/activate`);
+    }
+
+    msg($('bmsg'), `Restored ${count} profile(s)`, true);
+    await loadProfiles();
+    $('restoreFile').value = '';
+  } catch (err) {
+    msg($('bmsg'), err.message, false);
+    $('restoreFile').value = '';
+  }
+};
 
 $('wSave').onclick = async () => {
   const ssid = $('wSsid').value.trim(), p1 = $('wPass').value, p2 = $('wPass2').value;

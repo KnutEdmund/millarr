@@ -2,6 +2,10 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-24
+
+- Backup/restore is browser-side JSON over the existing form routes; no parser on the device.
+
 ## 2026-09-19 (profiles)
 
 - **Profile v2: 212-byte blob (name 48, notes 128); v1 blobs are treated as empty

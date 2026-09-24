@@ -126,3 +126,25 @@ field existed are rejected and treated as empty slots; see `LEDGER.md`).
 reasons verbatim in `{"error":"…"}`: `bad version`, `marks must be 1..8`,
 `name empty`, `name too long`, `name has invalid characters`, `notes too long`,
 `notes has invalid characters`, `bad type`, `distance out of range`.
+
+## Backup file
+
+The Settings page's Backup section downloads all stored profiles as a JSON file and
+can restore them from one, entirely in the browser — there is no backup endpoint.
+Restore replays the normal `POST /api/profiles/{id}` and
+`POST /api/profiles/{id}/activate` writes above, one per profile in file order.
+
+```json
+{
+  "format": "millarr-profiles",
+  "version": 1,
+  "exported_at": "2026-09-24T12:34:56Z",
+  "active": 0,
+  "profiles": [
+    {"id":0,"name":"Home treadmill","notes":"","type":"belt","marks":3,"mark_distance_m":[0.940,0.940,0.940]}
+  ]
+}
+```
+
+`belt_length_m` is omitted (it's derived from `mark_distance_m`). Wi-Fi settings are
+never included.

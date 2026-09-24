@@ -43,7 +43,8 @@ pio device monitor            # serial status line, 115200 baud
    optional notes (location, model, quirks), marks, and the measured distance
    between marks; a "+ New profile" button on both pages jumps straight to a blank
    profile form. Also change the sensor's Wi-Fi name and password here. The active
-   profile survives power cycles.
+   profile survives power cycles. Settings also lets you download all profiles as
+   a JSON backup and restore them onto the same or another sensor.
 4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
 
 ## Layout
