@@ -79,7 +79,7 @@ const $ = id => document.getElementById(id);
 let profiles = [];
 let active = 0;
 let editingId = null;
-let maxProfiles = 8;
+let maxProfiles = 20;
 
 function msg(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); }
 
@@ -271,12 +271,17 @@ $('restoreFile').onchange = async () => {
       return;
     }
 
+    msg($('bmsg'), `Restored ${count} profile(s)`, true);
+
     if (Number.isInteger(data.active) && data.profiles.some(p => p.id === data.active)) {
-      await post(`/api/profiles/${data.active}/activate`);
+      try {
+        await post(`/api/profiles/${data.active}/activate`);
+      } catch (err) {
+        msg($('bmsg'), `Restored ${count} profile(s), but could not activate profile ${data.active}: ${err.message}`, false);
+      }
     }
 
-    msg($('bmsg'), `Restored ${count} profile(s)`, true);
-    await loadProfiles();
+    await loadProfiles().catch(() => {});
     $('restoreFile').value = '';
   } catch (err) {
     msg($('bmsg'), err.message, false);
