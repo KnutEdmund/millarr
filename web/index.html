@@ -68,6 +68,7 @@
   <div class="card"><div class="label">Rejected (debounce / implausible)</div><div class="val"><span id="rejected">0</span> / <span id="implausible">0</span></div></div>
   <div class="card"><div class="label">RAM log (records)</div><div class="val"><span id="logsize">0</span> / <span id="logcap">?</span></div><div class="label" id="overwritten"></div></div>
   <div class="card"><div class="label">Flash session log</div><div class="val" id="flash">–</div><div class="label" id="flashNote"></div></div>
+  <div class="card"><div class="label">Bluetooth (RSC foot pod)</div><div class="val" id="ble">–</div><div class="label" id="bleNote"></div></div>
 </div>
 
 <h2>Sessions</h2>
@@ -235,6 +236,7 @@ async function pollStatus() {
     $('overwritten').textContent = s.log_overwritten ? `${s.log_overwritten} oldest records overwritten` : '';
     $('overwritten').className = s.log_overwritten ? 'label warn' : 'label';
     renderFlash(s.flash);
+    renderBle(s.ble);
     renderBars(s.mark_share);
   } catch (e) {
     $('conn').textContent = 'offline';
@@ -295,6 +297,15 @@ function renderFlash(f) {
   note.textContent = `${kb(f.used)} of ${kb(f.total)} used · ${f.sessions} file${f.sessions === 1 ? '' : 's'}`
     + (f.full ? ' · FULL: records are being dropped' : '') + (f.write_errors ? ` · ${f.write_errors} write errors` : '');
   note.className = f.full || f.write_errors ? 'label warn' : 'label';
+}
+
+function renderBle(b) {
+  if (!b) return;
+  const el = $('ble'), note = $('bleNote');
+  if (b.connected) { el.textContent = `connected · ${b.last_speed_mps.toFixed(2)} m/s`; el.className = 'val'; }
+  else if (b.advertising) { el.textContent = 'advertising'; el.className = 'val'; }
+  else { el.textContent = 'off'; el.className = 'val bad'; }
+  note.textContent = `${b.notifications} notifications · ${b.connects} connection${b.connects === 1 ? '' : 's'}`;
 }
 
 async function loadSessions() {
