@@ -10,7 +10,10 @@ Base URL: `http://192.168.4.1` (or `http://treadmill.local`) on the sensor's acc
 | GET | `/api/pulses.json?since=SEQ` | JSON array of records with `seq > SEQ`, max 500 |
 | GET | `/api/pulses.csv` | Whole log as CSV download |
 | GET | `/api/signal` | 200 ms ADC capture of the sensor's analog output |
-| POST | `/api/reset` | Clears log, distance and counters; `{"ok":true}` |
+| POST | `/api/reset` | Clears log, distance and counters and starts a new session file; `{"ok":true}` |
+| GET | `/api/sessions` | Session files on flash (below) |
+| GET | `/api/sessions/{id}.csv` | One session file as a CSV download |
+| POST | `/api/sessions/{id}/delete` | Delete a closed session file; `{"ok":true}` |
 | GET | `/api/profiles` | All stored profiles, the active id and the maximum slot count |
 | POST | `/api/profiles/{id}` | Create or replace profile `id` (0–19); form fields `name`, `type` (`belt`/`slats`), `marks` (1–8), `d0`…`d{marks-1}` (metres), optional `notes`; for slats also `slat_count` and `slat_pitch` (metres), and the distances may be omitted |
 | POST | `/api/profiles/{id}/activate` | Make `id` the active profile; the engine is reconfigured immediately |
@@ -43,6 +46,24 @@ A session file starts with `#` comment lines, then the same CSV as `/api/pulses.
 # t_us wraps every 4294967296 us: add 2^32 whenever it decreases. interval_us=0 marks a run restart.
 seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_mps
 ```
+
+`GET /api/sessions` lists the files, ascending by id:
+
+```json
+{"flash_ok":true,"full":false,"total":1441792,"used":301056,"active":12,
+ "sessions":[{"id":11,"bytes":230400,"active":false},{"id":12,"bytes":69040,"active":true,"records":1726}]}
+```
+
+`records` is exact for the active session only; for closed files estimate
+`(bytes − header) / 40`. `GET /api/sessions/{id}.csv` streams the file with a known
+`Content-Length` (filename `treadmill-session-000012.csv`); the active session is
+flushed first. The main loop is blocked while streaming (5–15 s for a full 1.4 MB
+file), but pulses are drained into the engine between 2 KB chunks, so nothing is
+dropped; flash writes are held while the active file is read, so prefer downloading
+closed sessions during a run. Errors: `bad session id` (not 1–9 digits),
+`no such session` (404), `open failed` (500). `POST /api/sessions/{id}/delete`:
+`bad session id`, `cannot delete active session`, `no such session` (404),
+`delete failed` (500).
 
 Activating another profile mid-session appends a `# profile … at_uptime_s=N` line at
 that point instead of starting a new file. Session ids come from an NVS counter and

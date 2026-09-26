@@ -24,6 +24,12 @@
   button, a.btn { background: #333; color: var(--fg); border: 0; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; cursor: pointer; font-size: 0.9rem; }
   button.danger { background: #5a2323; }
   .actions { margin-top: 1rem; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.7rem; border-bottom: 1px solid #2a2a2a; }
+  th { color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td button { padding: 0.3rem 0.7rem; font-size: 0.8rem; margin-right: 0.3rem; }
+  .badge { font-size: 0.7rem; color: var(--accent); margin-left: 0.4rem; }
   small { color: var(--muted); }
 </style>
 </head>
@@ -60,8 +66,13 @@
   <div class="card"><div class="label">Pulses / revolutions</div><div class="val"><span id="pulses">0</span> / <span id="revs">0</span></div></div>
   <div class="card"><div class="label">Dropped (ISR overflow)</div><div class="val" id="dropped">0</div></div>
   <div class="card"><div class="label">Rejected (debounce / implausible)</div><div class="val"><span id="rejected">0</span> / <span id="implausible">0</span></div></div>
-  <div class="card"><div class="label">Log</div><div class="val"><span id="logsize">0</span> / <span id="logcap">?</span></div><div class="label" id="overwritten"></div></div>
+  <div class="card"><div class="label">RAM log (records)</div><div class="val"><span id="logsize">0</span> / <span id="logcap">?</span></div><div class="label" id="overwritten"></div></div>
+  <div class="card"><div class="label">Flash session log</div><div class="val" id="flash">–</div><div class="label" id="flashNote"></div></div>
 </div>
+
+<h2>Sessions</h2>
+<table id="sessions"><thead><tr><th>Session</th><th>Size</th><th>Records</th><th></th></tr></thead><tbody><tr><td colspan="4"><small>loading…</small></td></tr></tbody></table>
+<small id="sessMsg">A session starts at boot and at each reset. Download closed sessions while running; the active one is flushed first.</small>
 
 <h2>Sensor signal (analog out, 200 ms)</h2>
 <canvas id="signalChart"></canvas>
@@ -71,8 +82,8 @@
 </div>
 
 <div class="actions row">
-  <a class="btn" href="/api/pulses.csv">Download CSV</a>
-  <button class="danger" id="reset">Reset log &amp; distance</button>
+  <a class="btn" href="/api/pulses.csv">Download RAM log (last 2048)</a>
+  <button class="danger" id="reset">Reset log &amp; distance (new session)</button>
 </div>
 
 <script>
@@ -223,6 +234,7 @@ async function pollStatus() {
     $('logcap').textContent = s.log_capacity;
     $('overwritten').textContent = s.log_overwritten ? `${s.log_overwritten} oldest records overwritten` : '';
     $('overwritten').className = s.log_overwritten ? 'label warn' : 'label';
+    renderFlash(s.flash);
     renderBars(s.mark_share);
   } catch (e) {
     $('conn').textContent = 'offline';
@@ -262,17 +274,77 @@ $('capture').onclick = async () => {
 };
 
 $('reset').onclick = async () => {
-  if (!confirm('Reset the pulse log and distance?')) return;
+  if (!confirm('Reset the pulse log and distance? This closes the current session and starts a new one.')) return;
   try {
     await fetch('/api/reset', { method: 'POST' });
     lastSeq = 0; revSpeeds = []; intervals = [];
+    loadSessions();
   } catch (e) {
     $('conn').textContent = 'reset failed';
   }
 };
 
+function kb(b) { return b >= 1048576 ? (b / 1048576).toFixed(2) + ' MB' : (b / 1024).toFixed(0) + ' KB'; }
+
+function renderFlash(f) {
+  if (!f) return;
+  const el = $('flash'), note = $('flashNote');
+  if (!f.ok) { el.textContent = 'unavailable'; el.className = 'val bad'; note.textContent = 'filesystem not mounted; only the RAM log is kept'; return; }
+  el.textContent = `session #${f.session_id} · ${f.session_records} records`;
+  el.className = f.full ? 'val warn' : 'val';
+  note.textContent = `${kb(f.used)} of ${kb(f.total)} used · ${f.sessions} file${f.sessions === 1 ? '' : 's'}`
+    + (f.full ? ' · FULL: records are being dropped' : '') + (f.write_errors ? ` · ${f.write_errors} write errors` : '');
+  note.className = f.full || f.write_errors ? 'label warn' : 'label';
+}
+
+async function loadSessions() {
+  try {
+    const d = await (await fetch('/api/sessions')).json();
+    const tb = $('sessions').querySelector('tbody');
+    tb.innerHTML = '';
+    if (!d.flash_ok) { tb.innerHTML = '<tr><td colspan="4"><small>flash unavailable</small></td></tr>'; return; }
+    if (!d.sessions.length) { tb.innerHTML = '<tr><td colspan="4"><small>no session files yet (a file is created on the first pulses)</small></td></tr>'; return; }
+    for (const s of d.sessions.slice().reverse()) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>#${s.id}${s.active ? '<span class="badge">ACTIVE</span>' : ''}</td><td class="num">${kb(s.bytes)}</td><td class="num">${s.active ? s.records : '≈' + Math.max(0, Math.round((s.bytes - 300) / 40))}</td>
+        <td><button data-act="dl" data-id="${s.id}">Download</button><button data-act="del" data-id="${s.id}" class="danger" ${s.active ? 'disabled' : ''}>Delete</button></td>`;
+      tb.appendChild(tr);
+    }
+  } catch (e) { /* offline; status poll reports it */ }
+}
+
+$('sessions').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = parseInt(b.dataset.id);
+  try {
+    if (b.dataset.act === 'dl') {
+      b.disabled = true;
+      $('sessMsg').textContent = `Downloading session #${id}…`;
+      const r = await fetch(`/api/sessions/${id}.csv`);
+      if (!r.ok) throw new Error((await r.json()).error || r.status);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `treadmill-session-${String(id).padStart(6, '0')}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      $('sessMsg').textContent = `Session #${id} downloaded (${kb(blob.size)}).`;
+      b.disabled = false;
+    }
+    if (b.dataset.act === 'del') {
+      if (!confirm(`Delete session #${id} from flash?`)) return;
+      const r = await fetch(`/api/sessions/${id}/delete`, { method: 'POST' });
+      if (!r.ok) throw new Error((await r.json()).error || r.status);
+      $('sessMsg').textContent = `Session #${id} deleted.`;
+      loadSessions();
+    }
+  } catch (err) { $('sessMsg').textContent = `Failed: ${err.message}`; b.disabled = false; }
+};
+
 setInterval(pollStatus, 500);
 setInterval(pollPulses, 1000);
+setInterval(loadSessions, 5000);
+loadSessions();
 loadProfiles();
 pollStatus();
 pollPulses();

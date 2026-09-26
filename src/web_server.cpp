@@ -30,6 +30,8 @@ WebServer server(80);
 SpeedEngine* engine_ = nullptr;
 
 constexpr size_t kMaxPulsesPerFetch = 500;
+constexpr size_t kMaxSessionsListed = 36;
+char csv_chunk[2048];  // shared by the CSV exports; static to keep it off the stack
 
 void sendJson(int code, const char* body) { server.send(code, "application/json", body); }
 
@@ -85,9 +87,9 @@ void handlePulsesCsv() {
   server.sendHeader("Content-Disposition", "attachment; filename=\"pulses.csv\"");
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/csv", "");
-  static char chunk[2048];
-  int hn = flash_log::header(chunk, sizeof chunk);
-  if (hn > 0 && (size_t)hn < sizeof chunk) server.sendContent(chunk, hn);
+  char* chunk = csv_chunk;
+  int hn = flash_log::header(chunk, sizeof csv_chunk);
+  if (hn > 0 && (size_t)hn < sizeof csv_chunk) server.sendContent(chunk, hn);
   server.sendContent(speed_core::kCsvHeader);
   size_t used = 0;
   char line[96];
@@ -96,7 +98,7 @@ void handlePulsesCsv() {
     int n = speed_core::formatRecordCsv(log.at(i), line, sizeof line);
     if (n <= 0) continue;
     if ((size_t)n >= sizeof line) n = sizeof line - 1;
-    if (used + n >= sizeof chunk) {
+    if (used + n >= sizeof csv_chunk) {
       server.sendContent(chunk, used);
       used = 0;
     }
@@ -112,6 +114,75 @@ void handleReset() {
   pulse_isr::resetCounters();
   flash_log::rotate();
   server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// --- Session log ---
+
+bool parseSessionArg(uint32_t& id) {
+  return speed_core::parseSessionId(server.pathArg(0).c_str(), id);
+}
+
+void handleSessionsList() {
+  const speed_core::FlashStatus f = flash_log::status();
+  static speed_core::SessionInfo list[kMaxSessionsListed];
+  const size_t n = flash_log::list(list, kMaxSessionsListed);
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json", "");
+  char buf[160];
+  snprintf(buf, sizeof buf, "{\"flash_ok\":%s,\"full\":%s,\"total\":%lu,\"used\":%lu,\"active\":%lu,\"sessions\":[",
+           f.ok ? "true" : "false", f.full ? "true" : "false", (unsigned long)f.total_bytes,
+           (unsigned long)f.used_bytes, (unsigned long)f.session_id);
+  server.sendContent(buf);
+  for (size_t i = 0; i < n; ++i) {
+    if (i) server.sendContent(",");
+    speed_core::formatSessionJson(list[i], buf, sizeof buf);
+    server.sendContent(buf);
+  }
+  server.sendContent("]}");
+  server.sendContent("");
+}
+
+// Streams one session file. Pulses are drained into the engine between chunks so
+// a long download does not overflow the ISR ring; flash writes are held while the
+// active session is being read (the batcher absorbs ~100 records meanwhile).
+void handleSessionCsv() {
+  uint32_t id;
+  if (!parseSessionArg(id)) { sendError(400, "bad session id"); return; }
+  const bool active = id == flash_log::sessionId();
+  if (active) flash_log::flush();
+  if (!flash_log::exists(id)) { sendError(404, "no such session"); return; }
+  fs::File f = flash_log::openForRead(id);
+  if (!f) { sendError(500, "open failed"); return; }
+  char disposition[72];
+  snprintf(disposition, sizeof disposition, "attachment; filename=\"treadmill-session-%06lu.csv\"", (unsigned long)id);
+  server.sendHeader("Content-Disposition", disposition);
+  const size_t total = f.size();
+  server.setContentLength(total);
+  server.send(200, "text/csv", "");
+  size_t remaining = total;
+  while (remaining > 0 && server.client().connected()) {
+    const size_t want = remaining < sizeof csv_chunk ? remaining : sizeof csv_chunk;
+    const size_t got = f.read(reinterpret_cast<uint8_t*>(csv_chunk), want);
+    if (got == 0) break;
+    server.sendContent(csv_chunk, got);
+    remaining -= got;
+    uint32_t t;
+    while (pulse_isr::pop(t)) {
+      engine_->onPulse(t);
+      flash_log::observe(engine_->log());
+    }
+    if (!active) flash_log::service(micros());
+  }
+  f.close();
+}
+
+void handleSessionDelete() {
+  uint32_t id;
+  if (!parseSessionArg(id)) { sendError(400, "bad session id"); return; }
+  if (id == flash_log::sessionId()) { sendError(400, "cannot delete active session"); return; }
+  if (!flash_log::exists(id)) { sendError(404, "no such session"); return; }
+  if (!flash_log::remove(id)) { sendError(500, "delete failed"); return; }
+  sendJson(200, "{\"ok\":true}");
 }
 
 void handleNotFound() {
@@ -268,6 +339,9 @@ void begin(SpeedEngine& engine) {
   server.on("/api/pulses.json", HTTP_GET, handlePulsesJson);
   server.on("/api/pulses.csv", HTTP_GET, handlePulsesCsv);
   server.on("/api/reset", HTTP_POST, handleReset);
+  server.on("/api/sessions", HTTP_GET, handleSessionsList);
+  server.on(UriBraces("/api/sessions/{}/delete"), HTTP_POST, handleSessionDelete);
+  server.on(UriBraces("/api/sessions/{}.csv"), HTTP_GET, handleSessionCsv);
   server.on("/api/signal", HTTP_GET, handleSignal);
   server.on("/api/profiles", HTTP_GET, handleProfilesList);
   // Specific patterns first: UriBraces "{}" at the end of a pattern also matches '/'.
