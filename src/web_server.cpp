@@ -56,7 +56,7 @@ void handleStatus() {
   EngineStatus s = engine_->status(micros());
   s.rejected_debounce += pulse_isr::rejected();
   speed_core::StatusExtras x{pulse_isr::dropped(), millis() / 1000, active_profile::slot(),
-                             active_profile::current().name, flash_log::status()};
+                             active_profile::current().name, flash_log::status(), {}};
   int n = speed_core::formatStatusJson(s, engine_->config(), x, buf, sizeof buf);
   if (n < 0 || n >= (int)sizeof buf) {
     Serial.println("status json truncated");

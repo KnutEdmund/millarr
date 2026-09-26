@@ -81,6 +81,8 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, const StatusE
                         "\"flash\":{\"ok\":%s,\"full\":%s,\"total\":%lu,\"used\":%lu,"
                         "\"session_id\":%lu,\"session_records\":%lu,\"session_bytes\":%lu,"
                         "\"write_errors\":%lu,\"sessions\":%u},"
+                        "\"ble\":{\"advertising\":%s,\"connected\":%s,\"connects\":%lu,"
+                        "\"notifications\":%lu,\"last_speed_mps\":%.3f},"
                         "\"profile\":{\"id\":%u,\"name\":\"%s\"},"
                         "\"config\":{\"marks_count\":%u,\"mark_distance_m\":",
                         (double)s.rev_speed_stddev, (unsigned)s.stats_revolutions,
@@ -91,7 +93,9 @@ int formatStatusJson(const EngineStatus& s, const EngineConfig& c, const StatusE
                         (unsigned long)x.flash.used_bytes, (unsigned long)x.flash.session_id,
                         (unsigned long)x.flash.session_records, (unsigned long)x.flash.session_bytes,
                         (unsigned long)x.flash.write_errors, (unsigned)x.flash.sessions,
-                        (unsigned)x.profile_id, x.profile_name ? x.profile_name : "",
+                        x.ble.advertising ? "true" : "false", x.ble.connected ? "true" : "false",
+                        (unsigned long)x.ble.connects, (unsigned long)x.ble.notifications,
+                        (double)x.ble.last_speed_mps, (unsigned)x.profile_id, x.profile_name ? x.profile_name : "",
                         (unsigned)n_marks);
   if (k < 0) return k;
   len += k;
