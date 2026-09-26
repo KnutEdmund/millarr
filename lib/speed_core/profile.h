@@ -30,7 +30,10 @@ struct Profile {
 float beltLength(const Profile& p);
 // nullptr when valid, otherwise a static English reason.
 const char* validate(const Profile& p);
-EngineConfig makeEngineConfig(const Profile& p, uint32_t debounce_us, uint32_t stop_timeout_us);
+EngineConfig makeEngineConfig(const Profile& p, uint32_t debounce_us, uint32_t stop_timeout_us,
+                              float max_speed_mps = 0.0f);
+// stopTimeoutUs() applied to the profile's longest mark distance.
+uint32_t stopTimeoutFor(const Profile& p, float min_speed_mps, uint32_t min_us, uint32_t max_us);
 // Equal spacing profile; name is truncated to fit.
 Profile makeDefaultProfile(const char* name, float belt_length_m, uint8_t marks);
 

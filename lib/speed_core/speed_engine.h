@@ -68,6 +68,8 @@ class SpeedEngine {
   uint32_t interval_count_ = 0;
   uint32_t revolution_count_ = 0;
   uint32_t rejected_ = 0;
+  uint32_t rejected_implausible_ = 0;
+  uint32_t min_gap_us_ = 0;  // shortest mark distance / max speed; 0 = filter disabled
 };
 
 }  // namespace speed_core

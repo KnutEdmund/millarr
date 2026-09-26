@@ -13,7 +13,10 @@ using speed_core::EngineConfig;
 using speed_core::EngineStatus;
 using speed_core::SpeedEngine;
 
-static const EngineConfig kConfig = speed_core::makeEqualConfig(BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US, STOP_TIMEOUT_US);
+static const EngineConfig kConfig = speed_core::makeEqualConfig(
+    BELT_LENGTH_M, MARKS_COUNT, DEBOUNCE_US,
+    speed_core::stopTimeoutUs(BELT_LENGTH_M / MARKS_COUNT, MIN_SPEED_MPS, STOP_TIMEOUT_MIN_US, STOP_TIMEOUT_MAX_US),
+    MAX_SPEED_MPS);
 SpeedEngine engine(kConfig);
 
 static uint32_t last_status_ms = 0;
@@ -54,8 +57,9 @@ void setup() {
   delay(200);
   Serial.println();
   Serial.println("treadmill-sensor boot");
-  Serial.printf("defaults belt=%.3fm marks=%u debounce=%luus stop=%luus\n", (double)BELT_LENGTH_M,
-                (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US, (unsigned long)STOP_TIMEOUT_US);
+  Serial.printf("defaults belt=%.3fm marks=%u debounce=%luus min_speed=%.2fm/s max_speed=%.1fm/s\n",
+                (double)BELT_LENGTH_M, (unsigned)MARKS_COUNT, (unsigned long)DEBOUNCE_US,
+                (double)MIN_SPEED_MPS, (double)MAX_SPEED_MPS);
 
   profile_store::begin(BELT_LENGTH_M, MARKS_COUNT);
   pinMode(0, INPUT_PULLUP);
@@ -84,9 +88,10 @@ void loop() {
   if (now_ms - last_status_ms >= STATUS_INTERVAL_MS) {
     last_status_ms = now_ms;
     EngineStatus s = engine.status(micros());
-    Serial.printf("speed=%.2fkm/h dist=%.1fm pulses=%lu rev=%lu dropped=%lu rejected=%lu\n",
+    Serial.printf("speed=%.2fkm/h dist=%.1fm pulses=%lu rev=%lu dropped=%lu rejected=%lu implausible=%lu\n",
                   (double)s.speed_mps * 3.6, (double)s.distance_m, (unsigned long)s.pulse_count,
                   (unsigned long)s.revolution_count, (unsigned long)pulse_isr::dropped(),
-                  (unsigned long)(s.rejected_debounce + pulse_isr::rejected()));
+                  (unsigned long)(s.rejected_debounce + pulse_isr::rejected()),
+                  (unsigned long)s.rejected_implausible);
   }
 }

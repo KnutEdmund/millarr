@@ -19,6 +19,7 @@ struct EngineConfig {
   float mark_distance_m[MAX_MARKS];   // [k] = distance from mark k to mark k+1 (mod marks_count)
   uint32_t debounce_us;               // reject pulses closer than this to the previous one
   uint32_t stop_timeout_us;           // no pulse for this long => stopped
+  float max_speed_mps;                // reject pulses implying a higher speed; 0 = disabled
 };
 
 // Sum of the first marks_count distances.
@@ -31,13 +32,27 @@ inline float beltLength(const EngineConfig& c) {
 
 // Equal spacing: belt_length_m / marks_count for every mark.
 inline EngineConfig makeEqualConfig(float belt_length_m, uint8_t marks_count, uint32_t debounce_us,
-                                    uint32_t stop_timeout_us) {
+                                    uint32_t stop_timeout_us, float max_speed_mps = 0.0f) {
   EngineConfig c{};
   c.marks_count = marks_count < 1 ? 1 : (marks_count > MAX_MARKS ? MAX_MARKS : marks_count);
   for (uint8_t k = 0; k < c.marks_count; ++k) c.mark_distance_m[k] = belt_length_m / c.marks_count;
   c.debounce_us = debounce_us;
   c.stop_timeout_us = stop_timeout_us;
+  c.max_speed_mps = max_speed_mps;
   return c;
+}
+
+// Stop timeout that still sees one pulse per mark at min_speed_mps: the longest
+// mark distance divided by the minimum speed, clamped to [min_us, max_us].
+// The minimum measurable speed therefore equals min_speed_mps unless the clamp
+// applies. A non-positive speed yields min_us.
+inline uint32_t stopTimeoutUs(float longest_mark_distance_m, float min_speed_mps, uint32_t min_us,
+                              uint32_t max_us) {
+  if (!(min_speed_mps > 0.0f) || !(longest_mark_distance_m > 0.0f)) return min_us;
+  const double us = static_cast<double>(longest_mark_distance_m) / min_speed_mps * 1e6;
+  if (us <= min_us) return min_us;
+  if (us >= max_us) return max_us;
+  return static_cast<uint32_t>(us + 0.5);
 }
 
 struct PulseRecord {
@@ -57,6 +72,7 @@ struct EngineStatus {
   uint32_t pulse_count;        // accepted pulses since reset
   uint32_t revolution_count;   // completed revolutions since reset
   uint32_t rejected_debounce;  // pulses rejected by the engine's debounce rule
+  uint32_t rejected_implausible;  // pulses rejected because they implied more than max_speed_mps
   float mark_share[MAX_MARKS]; // mean share of revolution time per mark over the stats window
   float rev_speed_stddev;      // std dev of rev speed over the stats window (m/s)
   uint8_t stats_revolutions;   // revolutions currently in the stats window (0..STATS_REVOLUTIONS)

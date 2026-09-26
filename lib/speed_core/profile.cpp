@@ -70,13 +70,24 @@ const char* validate(const Profile& p) {
   return nullptr;
 }
 
-EngineConfig makeEngineConfig(const Profile& p, uint32_t debounce_us, uint32_t stop_timeout_us) {
+EngineConfig makeEngineConfig(const Profile& p, uint32_t debounce_us, uint32_t stop_timeout_us,
+                              float max_speed_mps) {
   EngineConfig c{};
   c.marks_count = p.marks < 1 ? 1 : (p.marks > MAX_MARKS ? MAX_MARKS : p.marks);
   for (uint8_t k = 0; k < c.marks_count; ++k) c.mark_distance_m[k] = p.mark_distance_m[k];
   c.debounce_us = debounce_us;
   c.stop_timeout_us = stop_timeout_us;
+  c.max_speed_mps = max_speed_mps;
   return c;
+}
+
+uint32_t stopTimeoutFor(const Profile& p, float min_speed_mps, uint32_t min_us, uint32_t max_us) {
+  const uint8_t n = p.marks < 1 ? 1 : (p.marks > MAX_MARKS ? MAX_MARKS : p.marks);
+  float longest = 0.0f;
+  for (uint8_t k = 0; k < n; ++k) {
+    if (p.mark_distance_m[k] > longest) longest = p.mark_distance_m[k];
+  }
+  return stopTimeoutUs(longest, min_speed_mps, min_us, max_us);
 }
 
 Profile makeDefaultProfile(const char* name, float belt_length_m, uint8_t marks) {

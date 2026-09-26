@@ -59,7 +59,7 @@
   <div class="card"><div class="label">Jitter (rev speed std dev)</div><div class="val" id="jitter">–</div></div>
   <div class="card"><div class="label">Pulses / revolutions</div><div class="val"><span id="pulses">0</span> / <span id="revs">0</span></div></div>
   <div class="card"><div class="label">Dropped (ISR overflow)</div><div class="val" id="dropped">0</div></div>
-  <div class="card"><div class="label">Rejected (debounce)</div><div class="val" id="rejected">0</div></div>
+  <div class="card"><div class="label">Rejected (debounce / implausible)</div><div class="val"><span id="rejected">0</span> / <span id="implausible">0</span></div></div>
   <div class="card"><div class="label">Log</div><div class="val"><span id="logsize">0</span> / <span id="logcap">?</span></div><div class="label" id="overwritten"></div></div>
 </div>
 
@@ -216,6 +216,8 @@ async function pollStatus() {
     $('dropped').textContent = s.isr_dropped;
     $('dropped').className = s.isr_dropped ? 'val bad' : 'val';
     $('rejected').textContent = s.rejected_debounce;
+    $('implausible').textContent = s.rejected_implausible;
+    $('implausible').className = s.rejected_implausible ? 'warn' : '';
     $('logsize').textContent = s.log_size;
     $('logcap').textContent = s.log_capacity;
     $('overwritten').textContent = s.log_overwritten ? `${s.log_overwritten} oldest records overwritten` : '';

@@ -325,6 +325,7 @@ void test_json_status_contains_all_fields() {
   s.pulse_count = 13;
   s.revolution_count = 4;
   s.rejected_debounce = 1;
+  s.rejected_implausible = 0;
   s.mark_share[0] = 0.33f;
   s.mark_share[1] = 0.33f;
   s.mark_share[2] = 0.34f;
@@ -341,12 +342,12 @@ void test_json_status_contains_all_fields() {
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
   TEST_ASSERT_EQUAL_STRING(
       "{\"speed_mps\":2.500,\"speed_kmh\":9.000,\"running\":true,\"phase_locked\":true,\"distance_m\":12.340,"
-      "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"isr_dropped\":2,"
+      "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"rejected_implausible\":0,\"isr_dropped\":2,"
       "\"mark_share\":[0.330,0.330,0.340],\"rev_speed_stddev\":0.0120,\"stats_revolutions\":4,"
       "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
       "\"profile\":{\"id\":1,\"name\":\"Gym A\"},"
       "\"config\":{\"marks_count\":3,\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820,"
-      "\"debounce_us\":50000,\"stop_timeout_us\":3000000}}",
+      "\"debounce_us\":50000,\"stop_timeout_us\":3000000,\"max_speed_mps\":0.000}}",
       buf);
 }
 
@@ -572,7 +573,7 @@ void test_profile_belt_length_sums_only_used_marks() {
 void test_profile_make_engine_config() {
   Profile p = makeDefaultProfile("X", 2.82f, 3);
   p.mark_distance_m[0] = 0.90f; p.mark_distance_m[1] = 1.00f; p.mark_distance_m[2] = 0.92f;
-  EngineConfig c = makeEngineConfig(p, 50000u, 3000000u);
+  EngineConfig c = makeEngineConfig(p, 50000u, 3000000u, 8.0f);
   TEST_ASSERT_EQUAL_UINT8(3, c.marks_count);
   TEST_ASSERT_EQUAL_FLOAT(0.90f, c.mark_distance_m[0]);
   TEST_ASSERT_EQUAL_FLOAT(1.00f, c.mark_distance_m[1]);
@@ -580,6 +581,7 @@ void test_profile_make_engine_config() {
   TEST_ASSERT_EQUAL_FLOAT(0.0f, c.mark_distance_m[3]);
   TEST_ASSERT_EQUAL_UINT32(50000u, c.debounce_us);
   TEST_ASSERT_EQUAL_UINT32(3000000u, c.stop_timeout_us);
+  TEST_ASSERT_EQUAL_FLOAT(8.0f, c.max_speed_mps);
 }
 
 void test_profile_type_names() {
@@ -594,6 +596,77 @@ void test_profile_type_names() {
   TEST_ASSERT_FALSE(validName("", 24));
   TEST_ASSERT_FALSE(validName("a\"b", 24));
   TEST_ASSERT_FALSE(validName("tab\there", 24));
+}
+
+// --- Max-speed plausibility filter and geometry-derived stop timeout ---
+
+static EngineConfig oneMarkConfig(float max_speed_mps) {
+  return makeEqualConfig(3.603f, 1, 50000u, 3000000u, max_speed_mps);
+}
+
+void test_engine_rejects_implausible_speed() {
+  SpeedEngine e(oneMarkConfig(8.0f));
+  e.onPulse(1000000);
+  e.onPulse(1066400);  // 66 ms later: 54 m/s on a 3.603 m belt (first-field-run artifact)
+  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1, e.status(1066401).rejected_implausible);
+  TEST_ASSERT_EQUAL_UINT32(0, e.status(1066401).rejected_debounce);
+  e.onPulse(2261000);  // 1.261 s after the accepted pulse: 2.86 m/s
+  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1261000, e.log().at(1).interval_us);
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.857f, e.log().at(1).rev_speed_mps);
+}
+
+void test_engine_max_speed_zero_disables_filter() {
+  SpeedEngine e(oneMarkConfig(0.0f));
+  e.onPulse(1000000);
+  e.onPulse(1066400);
+  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(0, e.status(1066401).rejected_implausible);
+}
+
+void test_engine_plausible_fast_pulse_passes() {
+  SpeedEngine e(oneMarkConfig(8.0f));
+  e.onPulse(1000000);
+  e.onPulse(1456000);  // 7.9 m/s: below the 8 m/s ceiling
+  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(0, e.status(1456001).rejected_implausible);
+}
+
+void test_engine_implausible_uses_shortest_mark_distance() {
+  EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u, 8.0f);
+  c.mark_distance_m[0] = 0.5f; c.mark_distance_m[1] = 1.0f; c.mark_distance_m[2] = 1.32f;
+  SpeedEngine e(c);
+  e.onPulse(1000000);
+  e.onPulse(1070000);  // 70 ms: 7.1 m/s over the shortest mark, plausible
+  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  e.onPulse(1130000);  // 60 ms: 8.3 m/s over the shortest mark, rejected
+  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1, e.status(1130001).rejected_implausible);
+}
+
+void test_engine_reset_clears_implausible() {
+  SpeedEngine e(oneMarkConfig(8.0f));
+  e.onPulse(1000000);
+  e.onPulse(1066400);
+  e.reset();
+  TEST_ASSERT_EQUAL_UINT32(0, e.status(1066401).rejected_implausible);
+}
+
+void test_stop_timeout_from_geometry() {
+  // longest mark distance / min speed, clamped to [min_us, max_us]
+  TEST_ASSERT_UINT32_WITHIN(1, 7206000u, stopTimeoutUs(3.603f, 0.5f, 3000000u, 15000000u));
+  TEST_ASSERT_EQUAL_UINT32(3000000u, stopTimeoutUs(0.94f, 0.5f, 3000000u, 15000000u));
+  TEST_ASSERT_EQUAL_UINT32(15000000u, stopTimeoutUs(10.0f, 0.5f, 3000000u, 15000000u));
+  TEST_ASSERT_EQUAL_UINT32(3000000u, stopTimeoutUs(3.603f, 0.0f, 3000000u, 15000000u));  // guard
+}
+
+void test_stop_timeout_for_profile_uses_longest_mark() {
+  Profile p = makeDefaultProfile("X", 3.603f, 1);
+  TEST_ASSERT_UINT32_WITHIN(1, 7206000u, stopTimeoutFor(p, 0.5f, 3000000u, 15000000u));
+  Profile u = makeDefaultProfile("U", 4.5f, 3);
+  u.mark_distance_m[0] = 1.0f; u.mark_distance_m[1] = 2.5f; u.mark_distance_m[2] = 1.0f;
+  TEST_ASSERT_UINT32_WITHIN(1, 5000000u, stopTimeoutFor(u, 0.5f, 3000000u, 15000000u));
 }
 
 int main(int, char**) {
@@ -638,5 +711,12 @@ int main(int, char**) {
   RUN_TEST(test_json_profile);
   RUN_TEST(test_json_profile_notes_newline_escaped);
   RUN_TEST(test_json_status_truncation_is_reported);
+  RUN_TEST(test_engine_rejects_implausible_speed);
+  RUN_TEST(test_engine_max_speed_zero_disables_filter);
+  RUN_TEST(test_engine_plausible_fast_pulse_passes);
+  RUN_TEST(test_engine_implausible_uses_shortest_mark_distance);
+  RUN_TEST(test_engine_reset_clears_implausible);
+  RUN_TEST(test_stop_timeout_from_geometry);
+  RUN_TEST(test_stop_timeout_for_profile_uses_longest_mark);
   return UNITY_END();
 }

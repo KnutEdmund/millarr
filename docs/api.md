@@ -49,12 +49,12 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
 
 ```json
 {"speed_mps":2.500,"speed_kmh":9.000,"running":true,"phase_locked":true,"distance_m":12.340,
- "pulse_count":13,"revolution_count":4,"rejected_debounce":1,"isr_dropped":2,
+ "pulse_count":13,"revolution_count":4,"rejected_debounce":1,"rejected_implausible":0,"isr_dropped":2,
  "mark_share":[0.330,0.330,0.340],"rev_speed_stddev":0.0120,"stats_revolutions":4,
  "log_size":13,"log_capacity":2048,"log_overwritten":0,"last_seq":13,"uptime_s":99,
  "profile":{"id":1,"name":"Gym A"},
  "config":{"marks_count":3,"mark_distance_m":[0.940,0.940,0.940],"belt_length_m":2.820,
- "debounce_us":50000,"stop_timeout_us":3000000}}
+ "debounce_us":50000,"stop_timeout_us":7206000,"max_speed_mps":8.000}}
 ```
 
 - `speed_mps` is the revolution speed of the newest pulse, 0 when stopped.
@@ -68,10 +68,21 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
   names a physical mark (matching `config.mark_distance_m`): shares are only
   accumulated once the phase is locked.
 - `rev_speed_stddev` is over the same 10 revolutions, in m/s.
+- `rejected_debounce` counts pulses closer than `debounce_us` to the previous one (ISR
+  and engine rules combined). `rejected_implausible` counts pulses that would imply a
+  speed above `config.max_speed_mps` over the shortest mark distance; they are dropped
+  before they reach the log, the statistics window and the distance sum. A single
+  rejected pulse at start-up is normal (sensor settling); a growing count during a run
+  means a mark is double-triggering.
 - `profile` is the active profile's id and name.
 - `config` is the engine configuration currently in effect: the active profile's
   per-mark distances (`mark_distance_m[k]` = distance from mark `k` to mark `k+1`,
-  wrapping) and their sum `belt_length_m`, plus the fixed timing constants.
+  wrapping) and their sum `belt_length_m`, plus the timing constants. `debounce_us`
+  and `max_speed_mps` are compile-time constants. `stop_timeout_us` is derived from
+  the profile: `longest mark distance / MIN_SPEED_MPS` (0.5 m/s), clamped to 3–15 s,
+  so the slowest measurable speed is 0.5 m/s (1.8 km/h) unless the 3 s floor applies
+  (mark distance under 1.5 m, where it is `distance / 3 s`). A 1-mark 3.603 m belt
+  gets 7.2 s; the default 3-mark 2.82 m belt stays at 3 s.
 
 The diagnostic page's "Use measured distances" button (enabled once `phase_locked`
 is true and `stats_revolutions >= 10`) proposes new per-mark distances from the

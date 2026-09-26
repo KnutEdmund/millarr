@@ -11,7 +11,16 @@
 
 // --- Timing (microseconds) ---
 #define DEBOUNCE_US 50000UL
-#define STOP_TIMEOUT_US 3000000UL
+// Stop timeout is derived per profile: longest mark distance / MIN_SPEED_MPS,
+// clamped to [STOP_TIMEOUT_MIN_US, STOP_TIMEOUT_MAX_US]. MIN_SPEED_MPS is the
+// slowest belt speed the sensor can still measure (0.5 m/s = 1.8 km/h).
+#define MIN_SPEED_MPS 0.5f
+#define STOP_TIMEOUT_MIN_US 3000000UL
+#define STOP_TIMEOUT_MAX_US 15000000UL
+
+// --- Plausibility ---
+// Pulses implying a belt speed above this are rejected (8 m/s = 28.8 km/h).
+#define MAX_SPEED_MPS 8.0f
 
 // --- Wi-Fi access point ---
 #define AP_SSID "treadmill-sensor"

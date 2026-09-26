@@ -9,6 +9,16 @@ SpeedEngine::SpeedEngine(const EngineConfig& cfg) : cfg_(cfg) { clampConfig(); }
 void SpeedEngine::clampConfig() {
   if (cfg_.marks_count < 1) cfg_.marks_count = 1;
   if (cfg_.marks_count > MAX_MARKS) cfg_.marks_count = MAX_MARKS;
+  min_gap_us_ = 0;
+  if (cfg_.max_speed_mps > 0.0f) {
+    float shortest = cfg_.mark_distance_m[0];
+    for (uint8_t k = 1; k < cfg_.marks_count; ++k) {
+      if (cfg_.mark_distance_m[k] < shortest) shortest = cfg_.mark_distance_m[k];
+    }
+    if (shortest > 0.0f) {
+      min_gap_us_ = static_cast<uint32_t>(static_cast<double>(shortest) / cfg_.max_speed_mps * 1e6);
+    }
+  }
 }
 
 void SpeedEngine::reconfigure(const EngineConfig& cfg) {
@@ -76,6 +86,10 @@ void SpeedEngine::onPulse(uint32_t t) {
     uint32_t gap = t - last_t_;  // unsigned: correct across a single micros() wrap
     if (gap < cfg_.debounce_us) {
       ++rejected_;
+      return;
+    }
+    if (min_gap_us_ != 0 && gap < min_gap_us_) {
+      ++rejected_implausible_;
       return;
     }
     if (gap > cfg_.stop_timeout_us) startRun();
@@ -164,6 +178,7 @@ EngineStatus SpeedEngine::status(uint32_t now_us) const {
   s.pulse_count = pulse_count_;
   s.revolution_count = revolution_count_;
   s.rejected_debounce = rejected_;
+  s.rejected_implausible = rejected_implausible_;
   s.stats_revolutions = stats_count_;
   s.log_size = static_cast<uint32_t>(log_.size());
   s.log_capacity = static_cast<uint32_t>(log_.capacity());
@@ -205,6 +220,7 @@ void SpeedEngine::reset() {
   interval_count_ = 0;
   revolution_count_ = 0;
   rejected_ = 0;
+  rejected_implausible_ = 0;
   distance_m_ = 0.0f;
 }
 

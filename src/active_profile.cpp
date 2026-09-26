@@ -17,10 +17,12 @@ void apply(speed_core::SpeedEngine& engine) {
     current_ = speed_core::makeDefaultProfile("Home treadmill", BELT_LENGTH_M, MARKS_COUNT);
     Serial.println("active profile: slot unreadable, using built-in default");
   }
-  engine.reconfigure(speed_core::makeEngineConfig(current_, DEBOUNCE_US, STOP_TIMEOUT_US));
-  Serial.printf("profile %u '%s' type=%s marks=%u belt=%.3fm\n", (unsigned)slot_, current_.name,
-                speed_core::typeName(current_.type), (unsigned)current_.marks,
-                (double)speed_core::beltLength(current_));
+  const uint32_t stop_us = speed_core::stopTimeoutFor(current_, MIN_SPEED_MPS, STOP_TIMEOUT_MIN_US,
+                                                      STOP_TIMEOUT_MAX_US);
+  engine.reconfigure(speed_core::makeEngineConfig(current_, DEBOUNCE_US, stop_us, MAX_SPEED_MPS));
+  Serial.printf("profile %u '%s' type=%s marks=%u belt=%.3fm stop=%lums\n", (unsigned)slot_,
+                current_.name, speed_core::typeName(current_.type), (unsigned)current_.marks,
+                (double)speed_core::beltLength(current_), (unsigned long)(stop_us / 1000));
 }
 
 const speed_core::Profile& current() { return current_; }
