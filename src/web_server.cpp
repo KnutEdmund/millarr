@@ -10,6 +10,7 @@
 #include "active_profile.h"
 #include "adc_probe.h"
 #include "config.h"
+#include "flash_log.h"
 #include "format.h"
 #include "profile.h"
 #include "profile_store.h"
@@ -53,7 +54,7 @@ void handleStatus() {
   EngineStatus s = engine_->status(micros());
   s.rejected_debounce += pulse_isr::rejected();
   speed_core::StatusExtras x{pulse_isr::dropped(), millis() / 1000, active_profile::slot(),
-                             active_profile::current().name};
+                             active_profile::current().name, flash_log::status()};
   int n = speed_core::formatStatusJson(s, engine_->config(), x, buf, sizeof buf);
   if (n < 0 || n >= (int)sizeof buf) {
     Serial.println("status json truncated");
@@ -84,8 +85,10 @@ void handlePulsesCsv() {
   server.sendHeader("Content-Disposition", "attachment; filename=\"pulses.csv\"");
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/csv", "");
-  server.sendContent(speed_core::kCsvHeader);
   static char chunk[2048];
+  int hn = flash_log::header(chunk, sizeof chunk);
+  if (hn > 0 && (size_t)hn < sizeof chunk) server.sendContent(chunk, hn);
+  server.sendContent(speed_core::kCsvHeader);
   size_t used = 0;
   char line[96];
   const auto& log = engine_->log();
@@ -107,6 +110,7 @@ void handlePulsesCsv() {
 void handleReset() {
   engine_->reset();
   pulse_isr::resetCounters();
+  flash_log::rotate();
   server.send(200, "application/json", "{\"ok\":true}");
 }
 

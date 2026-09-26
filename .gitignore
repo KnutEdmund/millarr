@@ -1,6 +1,7 @@
 .pio/
 .vscode/
 src/web_pages.h
+src/fw_version.h
 *.pyc
 __pycache__/
 .DS_Store

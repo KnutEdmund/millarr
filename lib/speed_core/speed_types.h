@@ -82,4 +82,17 @@ struct EngineStatus {
   uint32_t last_seq;           // 0 when the log is empty
 };
 
+// State of the flash session log, reported in /api/status.
+struct FlashStatus {
+  bool ok;                   // filesystem mounted; false => nothing is written
+  bool full;                 // no room even after evicting closed sessions
+  uint32_t total_bytes;
+  uint32_t used_bytes;
+  uint32_t session_id;       // current session (file created lazily on the first flush)
+  uint32_t session_records;  // records written or pending for the current session
+  uint32_t session_bytes;    // bytes on flash for the current session
+  uint32_t write_errors;
+  uint8_t sessions;          // files on flash, including the current one if created
+};
+
 }  // namespace speed_core

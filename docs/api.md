@@ -21,6 +21,34 @@ Base URL: `http://192.168.4.1` (or `http://treadmill.local`) on the sensor's acc
 Note on `/api/pulses.csv`: sending the whole log blocks the sensor's main loop for up
 to about a second; the interrupt ring absorbs roughly 60 pulses meanwhile, so
 download while the belt is stopped, or check `isr_dropped` in `/api/status` afterwards.
+It only covers the RAM ring (last 2048 records); complete sessions come from the
+session log below. Both exports start with the same `#` metadata lines.
+
+## Session files
+
+Every accepted pulse is also appended to `/log/NNNNNN.csv` on the LittleFS
+partition (1.4 MB; about 115 KB per hour at one mark and 10 km/h, so roughly 11 hours
+of the oldest sessions are kept). A session is one `seq` space: a new file starts at
+boot and at `POST /api/reset`; the file is created on the first flush, so idle boots
+leave nothing behind. Writes happen from the main loop in batches of 16 records or
+every 5 s, never from the pulse path. When the partition is short of space or holds
+more than 32 sessions, the oldest closed sessions are deleted first.
+
+A session file starts with `#` comment lines, then the same CSV as `/api/pulses.csv`:
+
+```
+# millarr session 123
+# firmware a1b2c3d boot_uptime_s 12
+# profile 0 "Slat mill" type=slats marks=1 belt_length_m=3.506 mark_distance_m=[3.506] slat_count=47 slat_pitch_m=0.07460
+# t_us wraps every 4294967296 us: add 2^32 whenever it decreases. interval_us=0 marks a run restart.
+seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_mps
+```
+
+Activating another profile mid-session appends a `# profile … at_uptime_s=N` line at
+that point instead of starting a new file. Session ids come from an NVS counter and
+never repeat; gaps are normal (an id is consumed at every boot). The sensor has no
+clock, so the download filename carries the date the browser saw.
+`pio run -t erase` wipes the session log together with the profiles.
 
 ## Writes
 
@@ -54,6 +82,8 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
  "pulse_count":13,"revolution_count":4,"rejected_debounce":1,"rejected_implausible":0,"isr_dropped":2,
  "mark_share":[0.330,0.330,0.340],"rev_speed_stddev":0.0120,"stats_revolutions":4,
  "log_size":13,"log_capacity":2048,"log_overwritten":0,"last_seq":13,"uptime_s":99,
+ "flash":{"ok":true,"full":false,"total":1441792,"used":301056,"session_id":12,
+ "session_records":1726,"session_bytes":69040,"write_errors":0,"sessions":3},
  "profile":{"id":1,"name":"Gym A"},
  "config":{"marks_count":3,"mark_distance_m":[0.940,0.940,0.940],"belt_length_m":2.820,
  "debounce_us":50000,"stop_timeout_us":7206000,"max_speed_mps":8.000}}
@@ -76,6 +106,16 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
   before they reach the log, the statistics window and the distance sum. A single
   rejected pulse at start-up is normal (sensor settling); a growing count during a run
   means a mark is double-triggering.
+- `log_size` / `log_capacity` / `log_overwritten` describe the RAM ring that feeds
+  `/api/pulses.json` and `/api/pulses.csv` (2048 records, about 44 minutes at one
+  mark and 10 km/h). The flash session log below is not limited by it.
+- `flash` is the session log on the LittleFS partition: `ok` false means the
+  filesystem could not be mounted and nothing is written; `full` means even
+  evicting closed sessions left no room, so records are being dropped
+  (`write_errors` counts dropped batches and failed writes). `session_id` is the
+  current session, `session_records` the records queued or written for it, and
+  `session_bytes` its size on flash (updated at each flush, every 16 records or 5 s).
+  `sessions` is the number of session files on flash.
 - `profile` is the active profile's id and name.
 - `config` is the engine configuration currently in effect: the active profile's
   per-mark distances (`mark_distance_m[k]` = distance from mark `k` to mark `k+1`,

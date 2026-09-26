@@ -3,6 +3,8 @@
 #include "active_profile.h"
 #include "adc_probe.h"
 #include "config.h"
+#include "flash_log.h"
+#include "fw_version.h"
 #include "profile_store.h"
 #include "pulse_isr.h"
 #include "speed_engine.h"
@@ -65,6 +67,7 @@ void setup() {
   pinMode(0, INPUT_PULLUP);
   boot_ms = millis();
   active_profile::apply(engine);
+  flash_log::begin(FW_GIT_HASH);
 
   pulse_isr::begin(SENSOR_DO_PIN, DEBOUNCE_US);
   adc_probe::begin(SENSOR_AO_PIN);
@@ -77,7 +80,11 @@ void setup() {
 
 void loop() {
   uint32_t t;
-  while (pulse_isr::pop(t)) engine.onPulse(t);
+  while (pulse_isr::pop(t)) {
+    engine.onPulse(t);
+    flash_log::observe(engine.log());
+  }
+  flash_log::service(micros());
 
   engine.tick(micros());
   watchBootButton();
@@ -88,10 +95,13 @@ void loop() {
   if (now_ms - last_status_ms >= STATUS_INTERVAL_MS) {
     last_status_ms = now_ms;
     EngineStatus s = engine.status(micros());
-    Serial.printf("speed=%.2fkm/h dist=%.1fm pulses=%lu rev=%lu dropped=%lu rejected=%lu implausible=%lu\n",
+    const speed_core::FlashStatus f = flash_log::status();
+    Serial.printf("speed=%.2fkm/h dist=%.1fm pulses=%lu rev=%lu dropped=%lu rejected=%lu implausible=%lu"
+                  " flash=%s session=%lu records=%lu used=%luB\n",
                   (double)s.speed_mps * 3.6, (double)s.distance_m, (unsigned long)s.pulse_count,
                   (unsigned long)s.revolution_count, (unsigned long)pulse_isr::dropped(),
                   (unsigned long)(s.rejected_debounce + pulse_isr::rejected()),
-                  (unsigned long)s.rejected_implausible);
+                  (unsigned long)s.rejected_implausible, f.ok ? (f.full ? "full" : "ok") : "off",
+                  (unsigned long)f.session_id, (unsigned long)f.session_records, (unsigned long)f.used_bytes);
   }
 }

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "flash_log.h"
 #include "profile_store.h"
 
 namespace active_profile {
@@ -23,6 +24,7 @@ void apply(speed_core::SpeedEngine& engine) {
   Serial.printf("profile %u '%s' type=%s marks=%u belt=%.3fm stop=%lums\n", (unsigned)slot_,
                 current_.name, speed_core::typeName(current_.type), (unsigned)current_.marks,
                 (double)speed_core::beltLength(current_), (unsigned long)(stop_us / 1000));
+  flash_log::noteProfile(current_, slot_);
 }
 
 const speed_core::Profile& current() { return current_; }

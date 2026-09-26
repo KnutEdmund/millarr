@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <vector>
+#include <string>
 #include <cmath>
 #include <cstring>
 
@@ -9,6 +10,8 @@
 #include "synth.h"
 #include "format.h"
 #include "profile.h"
+#include "csv_batcher.h"
+#include "session.h"
 
 using namespace speed_core;
 
@@ -336,7 +339,10 @@ void test_json_status_contains_all_fields() {
   s.log_overwritten = 0;
   s.last_seq = 13;
   EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
-  StatusExtras x{2, 99, 1, "Gym A"};
+  StatusExtras x{2, 99, 1, "Gym A", {}};
+  x.flash.ok = true; x.flash.full = false; x.flash.total_bytes = 1441792; x.flash.used_bytes = 301056;
+  x.flash.session_id = 12; x.flash.session_records = 1726; x.flash.session_bytes = 69040;
+  x.flash.write_errors = 0; x.flash.sessions = 3;
   char buf[1024];
   int n = formatStatusJson(s, c, x, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
@@ -345,6 +351,8 @@ void test_json_status_contains_all_fields() {
       "\"pulse_count\":13,\"revolution_count\":4,\"rejected_debounce\":1,\"rejected_implausible\":0,\"isr_dropped\":2,"
       "\"mark_share\":[0.330,0.330,0.340],\"rev_speed_stddev\":0.0120,\"stats_revolutions\":4,"
       "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
+      "\"flash\":{\"ok\":true,\"full\":false,\"total\":1441792,\"used\":301056,\"session_id\":12,"
+      "\"session_records\":1726,\"session_bytes\":69040,\"write_errors\":0,\"sessions\":3},"
       "\"profile\":{\"id\":1,\"name\":\"Gym A\"},"
       "\"config\":{\"marks_count\":3,\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820,"
       "\"debounce_us\":50000,\"stop_timeout_us\":3000000,\"max_speed_mps\":0.000}}",
@@ -379,7 +387,7 @@ void test_json_profile_notes_newline_escaped() {
 void test_json_status_truncation_is_reported() {
   EngineStatus s{};
   EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
-  StatusExtras x{0, 0, 0, "x"};
+  StatusExtras x{0, 0, 0, "x", {}};
   char buf[64];
   int n = formatStatusJson(s, c, x, buf, sizeof buf);
   TEST_ASSERT_TRUE(n >= (int)sizeof buf);   // caller must treat this as truncated
@@ -754,6 +762,145 @@ void test_json_profile_slats() {
       buf);
 }
 
+// --- Flash session log: batcher, header, session metadata ---
+
+void test_log_newest() {
+  PulseLog log;
+  log.push(rec(1));
+  log.push(rec(2));
+  TEST_ASSERT_EQUAL_UINT32(2, log.newest().seq);
+  for (uint32_t i = 3; i <= LOG_CAPACITY + 5; ++i) log.push(rec(i));
+  TEST_ASSERT_EQUAL_UINT32(LOG_CAPACITY + 5, log.newest().seq);
+}
+
+static PulseRecord csvRec(uint32_t seq, uint32_t t_us) {
+  PulseRecord r{};
+  r.seq = seq; r.t_us = t_us; r.interval_us = 338400u; r.mark_index = 2;
+  r.mark_speed_mps = 2.77778f; r.rev_speed_mps = 2.7f;
+  return r;
+}
+
+void test_batcher_formats_lines_and_counts() {
+  CsvBatcher b;
+  TEST_ASSERT_EQUAL_UINT32(0, b.size());
+  TEST_ASSERT_EQUAL_UINT32(0, b.pending());
+  TEST_ASSERT_TRUE(b.addRecord(csvRec(1, 1000), 1000));
+  TEST_ASSERT_TRUE(b.addRecord(csvRec(2, 2000), 2000));
+  char line1[64], line2[64];
+  formatRecordCsv(csvRec(1, 1000), line1, sizeof line1);
+  formatRecordCsv(csvRec(2, 2000), line2, sizeof line2);
+  std::string expect = std::string(line1) + line2;
+  TEST_ASSERT_EQUAL_UINT32(expect.size(), b.size());
+  TEST_ASSERT_EQUAL_MEMORY(expect.data(), b.data(), expect.size());
+  TEST_ASSERT_EQUAL_UINT32(2, b.pending());
+}
+
+void test_batcher_flush_by_count() {
+  CsvBatcher b;
+  for (uint32_t i = 1; i < CsvBatcher::kFlushRecords; ++i) {
+    b.addRecord(csvRec(i, i * 1000), i * 1000);
+    TEST_ASSERT_FALSE(b.shouldFlush(i * 1000));
+  }
+  b.addRecord(csvRec(CsvBatcher::kFlushRecords, 99000), 99000);
+  TEST_ASSERT_TRUE(b.shouldFlush(99000));
+}
+
+void test_batcher_flush_by_age() {
+  CsvBatcher b;
+  TEST_ASSERT_FALSE(b.shouldFlush(10000000));  // empty never flushes
+  b.addRecord(csvRec(1, 1000000), 1000000);
+  TEST_ASSERT_FALSE(b.shouldFlush(1000000 + CsvBatcher::kFlushAgeUs - 1));
+  TEST_ASSERT_TRUE(b.shouldFlush(1000000 + CsvBatcher::kFlushAgeUs));
+  // Age is measured from the oldest pending record and survives a micros() wrap.
+  CsvBatcher w;
+  w.addRecord(csvRec(1, 0xFFFFFF00u), 0xFFFFFF00u);
+  TEST_ASSERT_TRUE(w.shouldFlush(CsvBatcher::kFlushAgeUs));
+}
+
+void test_batcher_never_overflows() {
+  CsvBatcher b;
+  uint32_t n = 0;
+  while (b.addRecord(csvRec(1000000 + n, 4000000000u), 0)) ++n;
+  TEST_ASSERT_TRUE(n > 50);
+  TEST_ASSERT_TRUE(b.size() <= CsvBatcher::kCapacity);
+  TEST_ASSERT_TRUE(b.shouldFlush(0));  // nearly full counts as a flush reason
+  TEST_ASSERT_EQUAL_UINT32(n, b.pending());
+  b.clear();
+  TEST_ASSERT_EQUAL_UINT32(0, b.size());
+  TEST_ASSERT_EQUAL_UINT32(0, b.pending());
+  TEST_ASSERT_FALSE(b.shouldFlush(0));
+}
+
+void test_batcher_add_line_comment() {
+  CsvBatcher b;
+  TEST_ASSERT_TRUE(b.addLine("# hello\n"));
+  TEST_ASSERT_EQUAL_UINT32(8, b.size());
+  TEST_ASSERT_EQUAL_UINT32(0, b.pending());     // comment lines are not records
+  TEST_ASSERT_FALSE(b.shouldFlush(100000000));  // and do not age
+  b.addRecord(csvRec(1, 5), 5);
+  TEST_ASSERT_EQUAL_UINT32(1, b.pending());
+  TEST_ASSERT_EQUAL_MEMORY("# hello\n1,5,", b.data(), 12);
+}
+
+void test_session_header_exact() {
+  Profile p = makeDefaultProfile("Home treadmill", 2.82f, 3);
+  SessionHeaderInfo h{123, "a1b2c3d", 12, &p, 0};
+  char buf[512];
+  int n = formatSessionHeader(h, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "# millarr session 123\n"
+      "# firmware a1b2c3d boot_uptime_s 12\n"
+      "# profile 0 \"Home treadmill\" type=belt marks=3 belt_length_m=2.820 mark_distance_m=[0.940,0.940,0.940]\n"
+      "# t_us wraps every 4294967296 us: add 2^32 whenever it decreases. interval_us=0 marks a run restart.\n",
+      buf);
+  Profile s = slatProfile("Slat mill", 47, 0.0746f, 1);
+  SessionHeaderInfo hs{7, "unknown", 0, &s, 4};
+  n = formatSessionHeader(hs, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "# millarr session 7\n"
+      "# firmware unknown boot_uptime_s 0\n"
+      "# profile 4 \"Slat mill\" type=slats marks=1 belt_length_m=3.506 mark_distance_m=[3.506] slat_count=47 slat_pitch_m=0.07460\n"
+      "# t_us wraps every 4294967296 us: add 2^32 whenever it decreases. interval_us=0 marks a run restart.\n",
+      buf);
+}
+
+void test_profile_comment_line() {
+  Profile p = makeDefaultProfile("Home treadmill", 2.82f, 3);
+  char buf[256];
+  int n = formatProfileComment(p, 0, 77, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "# profile 0 \"Home treadmill\" type=belt marks=3 belt_length_m=2.820 mark_distance_m=[0.940,0.940,0.940] at_uptime_s=77\n",
+      buf);
+}
+
+void test_session_json_exact() {
+  char buf[128];
+  SessionInfo a{12, 69040, 1726, true, true};
+  int n = formatSessionJson(a, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING("{\"id\":12,\"bytes\":69040,\"active\":true,\"records\":1726}", buf);
+  SessionInfo c{11, 230400, 0, false, false};
+  n = formatSessionJson(c, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING("{\"id\":11,\"bytes\":230400,\"active\":false}", buf);
+}
+
+void test_parse_session_id() {
+  uint32_t id = 0;
+  TEST_ASSERT_TRUE(parseSessionId("1", id));       TEST_ASSERT_EQUAL_UINT32(1, id);
+  TEST_ASSERT_TRUE(parseSessionId("123456", id));  TEST_ASSERT_EQUAL_UINT32(123456, id);
+  TEST_ASSERT_TRUE(parseSessionId("999999999", id));
+  TEST_ASSERT_FALSE(parseSessionId("0", id));
+  TEST_ASSERT_FALSE(parseSessionId("", id));
+  TEST_ASSERT_FALSE(parseSessionId("012", id));
+  TEST_ASSERT_FALSE(parseSessionId("1a", id));
+  TEST_ASSERT_FALSE(parseSessionId("1234567890", id));
+  TEST_ASSERT_FALSE(parseSessionId("-1", id));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -808,5 +955,15 @@ int main(int, char**) {
   RUN_TEST(test_profile_slats_calibrated_distances_pass);
   RUN_TEST(test_profile_v2_blob_upgrades_to_v3);
   RUN_TEST(test_json_profile_slats);
+  RUN_TEST(test_log_newest);
+  RUN_TEST(test_batcher_formats_lines_and_counts);
+  RUN_TEST(test_batcher_flush_by_count);
+  RUN_TEST(test_batcher_flush_by_age);
+  RUN_TEST(test_batcher_never_overflows);
+  RUN_TEST(test_batcher_add_line_comment);
+  RUN_TEST(test_session_header_exact);
+  RUN_TEST(test_profile_comment_line);
+  RUN_TEST(test_session_json_exact);
+  RUN_TEST(test_parse_session_id);
   return UNITY_END();
 }

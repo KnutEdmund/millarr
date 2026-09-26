@@ -27,6 +27,8 @@ class PulseLog {
   size_t capacity() const { return kCapacity; }
   uint32_t overwritten() const { return overwritten_; }
   uint32_t lastSeq() const { return count_ ? at(count_ - 1).seq : 0; }
+  // The most recently pushed record. Caller must ensure size() > 0.
+  const PulseRecord& newest() const { return at(count_ - 1); }
 
   // i = 0 is the oldest retained record. Caller must ensure i < size().
   const PulseRecord& at(size_t i) const {
