@@ -84,6 +84,11 @@ Writes happen from the main loop in batches every 16 records or 5 s, so at most 
 of data is lost on power loss. `pio run -t erase` wipes the session log together
 with the profiles.
 
+## Garmin watch
+
+The sensor advertises as a Bluetooth LE foot pod; pairing and watch settings are
+in `docs/garmin.md`.
+
 ## Recovering Wi-Fi settings
 
 If the access point name or password is forgotten: Reset or power-cycle the sensor,

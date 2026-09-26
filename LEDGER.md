@@ -10,7 +10,23 @@ Dated, append-only. Newest first.
   so it was formatted once (session files lost, NVS profiles kept).
 - **NimBLE-Arduino 2.5.1**, pinned exactly like the platform, peripheral role only,
   one connection, logging off. Bluedroid rejected: about twice the flash and 100 KB
-  more RAM.
+  more RAM. Measured: firmware.bin 940 KB → 1,183 KB, static RAM +9 KB, heap
+  102 KB → 82 KB after `NimBLEDevice::init` and advertising.
+- **RSC only, minimal**: Feature 0x0004 (walking/running status), Sensor Location
+  Other, no Total Distance and therefore no SC Control Point (the watch integrates
+  speed and applies its own calibration factor; the sensor's distance is in the
+  session log). Device Information carries the firmware git hash.
+- **Cadence 0 on purpose**: the runner's cadence comes from the HRM 600 or the watch
+  and a belt sensor cannot measure it. Agreed fallback if the watch rejects cadence
+  0: synthesize it from speed (one constant, `RSC_CADENCE_SPM`), accepting that
+  the pod then overrides the HRM cadence.
+- **One packet per second from `loop()`**, also at 0 m/s, speed = `speedAt()` (newest
+  revolution speed, held until the derived stop timeout). Running flag at 6 km/h.
+- **Encoder in `speed_core` (`rsc.{h,cpp}`), NimBLE glue in `src/ble_rsc`.** NimBLE
+  callbacks run on the host task and touch atomics only; the engine, Serial,
+  LittleFS and NVS stay on `loop()`.
+- **Soft-AP and BLE always on**, Wi-Fi started first. `WiFi.setSleep(false)` is
+  forbidden: with both radios up it aborts in coexistence init.
 
 ## 2026-09-26 (field-run fixes)
 
