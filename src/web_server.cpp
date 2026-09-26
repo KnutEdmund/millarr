@@ -10,6 +10,7 @@
 #include "active_profile.h"
 #include "adc_probe.h"
 #include "config.h"
+#include "ble_rsc.h"
 #include "flash_log.h"
 #include "format.h"
 #include "profile.h"
@@ -56,7 +57,7 @@ void handleStatus() {
   EngineStatus s = engine_->status(micros());
   s.rejected_debounce += pulse_isr::rejected();
   speed_core::StatusExtras x{pulse_isr::dropped(), millis() / 1000, active_profile::slot(),
-                             active_profile::current().name, flash_log::status(), {}};
+                             active_profile::current().name, flash_log::status(), ble_rsc::status()};
   int n = speed_core::formatStatusJson(s, engine_->config(), x, buf, sizeof buf);
   if (n < 0 || n >= (int)sizeof buf) {
     Serial.println("status json truncated");

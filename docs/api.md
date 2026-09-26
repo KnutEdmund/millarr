@@ -105,6 +105,7 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
  "log_size":13,"log_capacity":2048,"log_overwritten":0,"last_seq":13,"uptime_s":99,
  "flash":{"ok":true,"full":false,"total":1441792,"used":301056,"session_id":12,
  "session_records":1726,"session_bytes":69040,"write_errors":0,"sessions":3},
+ "ble":{"advertising":false,"connected":true,"connects":2,"notifications":1234,"last_speed_mps":2.500},
  "profile":{"id":1,"name":"Gym A"},
  "config":{"marks_count":3,"mark_distance_m":[0.940,0.940,0.940],"belt_length_m":2.820,
  "debounce_us":50000,"stop_timeout_us":7206000,"max_speed_mps":8.000}}
@@ -137,6 +138,12 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
   current session, `session_records` the records queued or written for it, and
   `session_bytes` its size on flash (updated at each flush, every 16 records or 5 s).
   `sessions` is the number of session files on flash.
+- `ble` is the Bluetooth LE foot pod (RSC service). `advertising` and `connected`
+  are exclusive: the sensor stops advertising while a watch or phone is connected
+  and resumes when it disconnects. `connects` counts connections since boot,
+  `notifications` the RSC measurements sent (one per second while connected), and
+  `last_speed_mps` the speed in the most recent one. None of these are reset by
+  `POST /api/reset`.
 - `profile` is the active profile's id and name.
 - `config` is the engine configuration currently in effect: the active profile's
   per-mark distances (`mark_distance_m[k]` = distance from mark `k` to mark `k+1`,
