@@ -30,8 +30,8 @@ session log below. Both exports start with the same `#` metadata lines.
 ## Session files
 
 Every accepted pulse is also appended to `/log/NNNNNN.csv` on the LittleFS
-partition (1.4 MB; about 115 KB per hour at one mark and 10 km/h, so roughly 11 hours
-of the oldest sessions are kept). A session is one `seq` space: a new file starts at
+partition (1.9 MB; about 115 KB per hour at one mark and 10 km/h, so roughly 16 hours
+of the newest sessions are kept). A session is one `seq` space: a new file starts at
 boot and at `POST /api/reset`; the file is created on the first flush, so idle boots
 leave nothing behind. Writes happen from the main loop in batches of 16 records or
 every 5 s, never from the pulse path. When the partition is short of space or holds
@@ -57,7 +57,7 @@ seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_mps
 `records` is exact for the active session only; for closed files estimate
 `(bytes − header) / 40`. `GET /api/sessions/{id}.csv` streams the file with a known
 `Content-Length` (filename `treadmill-session-000012.csv`); the active session is
-flushed first. The main loop is blocked while streaming (5–15 s for a full 1.4 MB
+flushed first. The main loop is blocked while streaming (5–20 s for a full 1.9 MB
 file), but pulses are drained into the engine between 2 KB chunks, so nothing is
 dropped; flash writes are held while the active file is read, so prefer downloading
 closed sessions during a run. Errors: `bad session id` (not 1–9 digits),

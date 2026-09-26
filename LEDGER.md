@@ -2,6 +2,16 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-26 (BLE RSC)
+
+- **Partition table `no_ota.csv`** (framework-shipped: one 2 MB app slot, 1.9 MB
+  `spiffs`, NVS unchanged) supersedes the stock table below. The firmware was 940 KB
+  in the 1.25 MB slot before NimBLE; OTA was never used. The LittleFS partition moved,
+  so it was formatted once (session files lost, NVS profiles kept).
+- **NimBLE-Arduino 2.5.1**, pinned exactly like the platform, peripheral role only,
+  one connection, logging off. Bluedroid rejected: about twice the flash and 100 KB
+  more RAM.
+
 ## 2026-09-26 (field-run fixes)
 
 - **Session log on LittleFS as CSV text**, one file per seq space (boot or reset),
