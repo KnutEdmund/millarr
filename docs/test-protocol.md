@@ -14,9 +14,16 @@ placement or firmware timing. Record results in `docs/results/` (create it) as
 
 ## 2. Belt length and mark spacing
 
-Measure the belt length once with a tape and enter it as equal distances first;
-calibration redistributes distances but keeps their sum, so the tape measurement
-anchors absolute distance.
+The belt length anchors absolute distance: calibration redistributes the per-mark
+distances but keeps their sum.
+
+- **Belt treadmill:** measure the belt length once with a tape along the belt and
+  enter it as equal distances first (`type=belt`).
+- **Slat treadmill:** never use a tape or a string around the loop (it follows the
+  slat tops and over-measures by about 2π·h). Count the slats over one revolution
+  and measure 20 pitches mid-flat, then enter count and pitch with `type=slats`;
+  see `docs/hardware.md`, "Slat belts". `/api/profiles` shows `slat_count`,
+  `slat_pitch_m` and the resulting `belt_length_m`.
 
 1. Create or select a profile for this treadmill on the **Settings** page.
 2. Run the treadmill at its lowest speed until the diagnostic page shows "phase
@@ -26,9 +33,27 @@ anchors absolute distance.
 4. Repeat once more from a fresh run. The second set of distances must agree with
    the first within 1 %.
 
+## 2b. Session log
+
+After any run that is going to be analysed, download the session from the
+Sessions table on the diagnostic page (closed sessions can be downloaded while the
+belt runs; the active one is flushed first) rather than the RAM-log CSV, which only
+holds the last 2048 records.
+
+1. `head -5` of the file shows the session id, firmware hash and the profile
+   geometry in effect. Note both in the results document.
+2. `seq` must be contiguous from 1: `awk -F, '!/^#/ && NR>1 && $1!=n+1 {print}; {n=$1}'`
+   prints nothing.
+3. `isr_dropped` in `/api/status` is still 0 after the download.
+4. `rejected_implausible` should be 0 or a single start-up pulse; more than that
+   during a run means a mark is double-triggering.
+
 ## 3. Treadmill, no runner
 
-Hold each of 6, 8, 10, 12, 14 km/h for 60 s. For each, record:
+Hold each of 6, 8, 10, 12, 14 km/h for 60 s, plus one step at the lowest speed the
+console offers (the sensor's floor is 0.5 m/s = 1.8 km/h unless the 3 s stop
+timeout applies; the current value is `config.stop_timeout_us` in `/api/status`).
+For each, record:
 
 | Console km/h | Sensor mean km/h | Std dev % | Dropped | Rejected | Mark share deviation |
 |---|---|---|---|---|---|

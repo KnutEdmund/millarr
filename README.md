@@ -7,16 +7,20 @@ broadcasts Bluetooth LE Running Speed and Cadence to watches and apps.
 The device timestamps every mark pulse to the microsecond, computes revolution-based
 speed with per-mark distance correction, hosts its own Wi-Fi access point, and serves
 a diagnostic web page with live speed, per-mark statistics, sensor signal capture and
-CSV export. Per-treadmill profiles (name, mark count, measured mark distances) and
-the Wi-Fi access point credentials are configured from a **Settings** page and
-persisted in NVS across power cycles.
+CSV export, and keeps every session as a CSV file on its own flash so long runs are
+captured without a browser connected. Per-treadmill profiles (name, mark count,
+measured mark distances, or slat count and pitch for slat belts) and the Wi-Fi
+access point credentials are configured from a **Settings** page and persisted in
+NVS across power cycles.
 
 ## Hardware
 
 - ESP32 dev board (38-pin, CP2102, USB-C)
 - TCRT5000 IR reflective sensor module (DO → GPIO18, AO → GPIO34)
 - WeMos 18650 battery shield V3 + 18650 cell
-- Three white correction-fluid marks on the belt, 15 mm diameter, equidistant
+- One to eight white correction-fluid marks on the belt, 15 mm diameter (three,
+  equidistant, is the default). Slat belts work the same way; their length is
+  entered as slat count × pitch, never measured with a tape
 
 See `docs/hardware.md` for wiring and belt marking.
 
@@ -46,13 +50,16 @@ pio device monitor            # serial status line, 115200 baud
    profile survives power cycles. Settings also lets you download all profiles as
    a JSON backup and restore them onto the same or another sensor.
 4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
+5. After a run, download the session file from the Sessions table on the
+   diagnostic page. A session starts at boot and at each reset; files carry the
+   profile geometry and firmware hash in their header.
 
 ## Layout
 
 | Path | What |
 |------|------|
 | `lib/speed_core/` | Pure C++ speed engine, log, profile model and formatters (unit-tested) |
-| `src/` | Firmware: ISR, Wi-Fi AP, HTTP server, ADC probe, `src/profile_store.cpp` (profiles and Wi-Fi settings in NVS) |
+| `src/` | Firmware: ISR, Wi-Fi AP, HTTP server, ADC probe, `src/profile_store.cpp` (profiles and Wi-Fi settings in NVS), `src/flash_log.cpp` (session files on LittleFS) |
 | `web/index.html` | Diagnostic page, embedded into firmware at build time |
 | `web/settings.html` | Settings page: profile editor and Wi-Fi credentials, embedded at build time |
 | `test/` | Unity tests (`pio test -e native`) |

@@ -15,9 +15,11 @@ cable powers the board; do not feed 5 V from both at once.
 ## Belt marks
 
 - White correction fluid, three round marks ≈ 15 mm diameter.
-- Spacing: belt length / 3, measured with a tape along the belt edge. Mark the
-  positions before painting. Unequal spacing does not affect revolution speed but
-  shows up in the mark-share bars on the web page.
+- Spacing: belt length / 3, measured with a tape along the belt edge (belt
+  treadmills; for slat belts see below). Mark the positions before painting.
+  Unequal spacing does not affect revolution speed but shows up in the mark-share
+  bars on the web page. One mark is enough for speed and distance; more marks give
+  faster stop detection and per-mark statistics.
 - Location: a few centimetres from the belt edge, on the stretch that slides over
   the deck near the front motor cover, where the belt does not flap.
 
@@ -34,12 +36,53 @@ cable powers the board; do not feed 5 V from both at once.
 
 ## Belt length
 
-Measure once with a tape (typical 2.7–3.0 m). Set `BELT_LENGTH_M` in
-`include/config.h`. Cross-check: walk the belt by hand and count revolutions on the
-web page over a marked distance. `BELT_LENGTH_M`/`MARKS_COUNT` only seed the
+The engine needs the distance the running surface travels per revolution. For a
+conventional belt, measure once with a tape along the belt (typical 2.7–3.0 m) and
+enter it as the profile's mark distances on the **Settings** page (`type=belt`).
+Cross-check: walk the belt by hand and count revolutions on the web page over a
+marked distance. `BELT_LENGTH_M`/`MARKS_COUNT` in `include/config.h` only seed the
 built-in default profile the first time the device boots; after that, per-treadmill
-belt length and mark spacing live in profiles on the **Settings** page (see
-`docs/api.md`), not in `config.h`.
+geometry lives in profiles (see `docs/api.md`), not in `config.h`.
+
+## Slat belts
+
+On a slat treadmill the calibration length is the loop length at the **neutral
+line** of the chain or belt the slats are bolted to: on the flat every slat
+translates exactly with the chain. A tape on top of the deck, or a string around
+the outside of the loop, follows the slat **tops**, which swing around the end drums
+on a larger radius than the neutral line. That path is longer by 2π·h, where h is
+the height from the neutral line to the slat surface: about 10 cm for h ≈ 16 mm, a
++2.8 % speed error on a 3.6 m belt (`docs/results/2026-09-26-first-field-run.md`).
+**Do not measure a slat belt with a tape or a string around the loop.**
+
+Measure it on the top side only, with no assumptions about the ends:
+
+1. **Count the slats** over one full revolution. Jog the belt slowly by hand or at
+   the lowest speed and use the painted sensor mark as the start/stop reference.
+   This is an integer with zero error.
+2. **Measure the pitch over a long baseline** in the middle of the flat section,
+   where the slats sit at exactly the chain pitch (they only splay near the drums):
+   leading edge of slat 1 to leading edge of slat 21 is 20 pitches. ±2 mm over
+   about 2 m is 0.1 %.
+3. Belt length = slat count × pitch. Enter both on the Settings page with
+   `type=slats`; the page computes the belt length and seeds the mark distances.
+   Calibration ("Use measured distances") still works on top of it.
+
+The sensor still reads painted marks on a slat belt; the slat count and pitch only
+replace the tape measurement.
+
+## Session log
+
+Every accepted pulse is also written to a session file on the ESP32's flash
+(LittleFS on the stock 1.4 MB `spiffs` partition), so a full training session
+survives without a browser connected. A new session starts at boot and at each
+"Reset log" on the diagnostic page; files are listed, downloaded and deleted from
+the Sessions table there. Capacity is about 115 KB per hour at one mark and
+10 km/h (roughly 11 hours of the newest sessions; a 3-mark belt at 12 km/h uses
+about 500 KB per hour), and the oldest closed sessions are evicted automatically.
+Writes happen from the main loop in batches every 16 records or 5 s, so at most 5 s
+of data is lost on power loss. `pio run -t erase` wipes the session log together
+with the profiles.
 
 ## Recovering Wi-Fi settings
 

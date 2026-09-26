@@ -2,6 +2,34 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-26 (field-run fixes)
+
+- **Session log on LittleFS as CSV text**, one file per seq space (boot or reset),
+  created lazily on the first flush, `#` metadata header (session id, firmware
+  hash, profile geometry, `t_us` wrap note) before the usual CSV header. Binary
+  records were rejected: one column definition, and the download is a plain file.
+- **Stock partition table**: LittleFS uses the 1.4 MB `spiffs` partition; no custom
+  table. About 115 KB/h at one mark and 10 km/h.
+- **Flushes from `loop()` through a 4 KB batcher**, every 16 records or 5 s;
+  `onPulse` never touches flash. Oldest closed sessions are evicted at 32 files or
+  when less than 96 KB headroom remains; the active session is never evicted.
+- **`/api/pulses.csv` is kept** as the flash-independent fallback (RAM ring only).
+- **A profile switch appends a `# profile … at_uptime_s` line**; it does not start a
+  new session.
+- **Closed sessions report bytes only**; an exact record count would need a full
+  file read.
+- **Stop timeout is derived**: longest mark distance / 0.5 m/s, clamped 3–15 s. The
+  fixed 3 s floor made walking speeds invisible on a 1-mark belt (4.3 km/h floor).
+- **Max-speed filter 8 m/s**, global constant, rejects (not flags) pulses that imply
+  more than that over the shortest mark distance; counted as `rejected_implausible`.
+- **Profile v3 (220 B): slats store `slat_count` and `slat_pitch_m`.** Slats are
+  geometry only: the sensor still reads painted marks; per-slat sensing (2026-09-18
+  note) stays out of scope. `mark_distance_m` stays the engine's only truth and must
+  sum to count × pitch within 0.5 %, so calibration keeps working. Stored v2 blobs
+  are upgraded on load (memcpy plus zeroed slat fields) instead of being dropped.
+- **Slat belts are never tape-measured**: the calibration length is the chain's
+  neutral line; a tape or string on the slat tops over-measures by 2π·h.
+
 ## 2026-09-24
 
 - Backup/restore is browser-side JSON over the existing form routes; no parser on the device.
