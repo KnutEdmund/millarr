@@ -109,7 +109,8 @@ int formatProfileJson(const Profile& p, uint8_t id, char* buf, size_t n) {
   len += k;
   len = appendDistances(p.mark_distance_m, marks, buf, n, len);
   if (len < 0 || (size_t)len >= n) return len;
-  k = std::snprintf(buf + len, n - len, ",\"belt_length_m\":%.3f}", (double)beltLength(p));
+  k = std::snprintf(buf + len, n - len, ",\"slat_count\":%u,\"slat_pitch_m\":%.5f,\"belt_length_m\":%.3f}",
+                    (unsigned)p.slat_count, (double)p.slat_pitch_m, (double)beltLength(p));
   if (k < 0) return k;
   return len + k;
 }

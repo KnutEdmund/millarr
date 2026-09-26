@@ -179,11 +179,24 @@ void handleProfileSave() {
   long marks = server.arg("marks").toInt();
   if (marks < 1 || marks > speed_core::MAX_MARKS) { sendError(400, "marks must be 1..8"); return; }
   p.marks = static_cast<uint8_t>(marks);
-  for (uint8_t k = 0; k < p.marks; ++k) {
-    char key[6];
-    snprintf(key, sizeof key, "d%u", (unsigned)k);
-    if (!server.hasArg(key)) { sendError(400, "missing distance"); return; }
-    p.mark_distance_m[k] = server.arg(key).toFloat();
+  const bool slats = p.type == speed_core::TreadmillType::Slats;
+  if (slats) {
+    if (!server.hasArg("slat_count")) { sendError(400, "missing slat count"); return; }
+    if (!server.hasArg("slat_pitch")) { sendError(400, "missing slat pitch"); return; }
+    long count = server.arg("slat_count").toInt();
+    p.slat_count = static_cast<uint16_t>(count < 0 ? 0 : (count > 65535 ? 65535 : count));
+    p.slat_pitch_m = server.arg("slat_pitch").toFloat();
+  }
+  // Slat profiles may omit the distances: an equal split of count x pitch is seeded.
+  if (slats && !server.hasArg("d0")) {
+    speed_core::seedEqualDistances(p, speed_core::slatBeltLength(p));
+  } else {
+    for (uint8_t k = 0; k < p.marks; ++k) {
+      char key[6];
+      snprintf(key, sizeof key, "d%u", (unsigned)k);
+      if (!server.hasArg(key)) { sendError(400, "missing distance"); return; }
+      p.mark_distance_m[k] = server.arg(key).toFloat();
+    }
   }
   if (const char* why = speed_core::validate(p)) { sendError(400, why); return; }
   Profile old{};

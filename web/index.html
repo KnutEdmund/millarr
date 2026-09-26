@@ -102,7 +102,7 @@ async function loadProfiles() {
       sel.innerHTML = '';
       for (const p of profiles) {
         const o = document.createElement('option');
-        o.value = p.id; o.textContent = `${p.name} (${p.belt_length_m.toFixed(2)} m, ${p.marks} marks)`;
+        o.value = p.id; o.textContent = `${p.name} (${p.belt_length_m.toFixed(2)} m, ${p.marks} mark${p.marks > 1 ? 's' : ''}${p.type === 'slats' ? `, ${p.slat_count} slats` : ''})`;
         sel.appendChild(o);
       }
       sel.value = String(activeId);
@@ -137,7 +137,8 @@ $('useMeasured').onclick = async () => {
     const d = proposedDistances(s);
     const lines = d.map((v, k) => `mark ${k} → ${(k + 1) % d.length}: ${(p.mark_distance_m[k] ?? 0).toFixed(3)} → ${v.toFixed(3)} m`).join('\n');
     if (!confirm(`Update "${p.name}" with measured distances?\n\n${lines}\n\nBelt length stays ${s.config.belt_length_m.toFixed(3)} m.`)) return;
-    const fields = { name: p.name, type: p.type, marks: d.length };
+    const fields = { name: p.name, type: p.type, marks: d.length, notes: p.notes || '' };
+    if (p.type === 'slats') { fields.slat_count = p.slat_count; fields.slat_pitch = p.slat_pitch_m.toFixed(5); }
     d.forEach((v, k) => fields['d' + k] = v.toFixed(4));
     const r = await fetch(`/api/profiles/${p.id}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) });
     if (!r.ok) throw new Error((await r.json()).error || r.status);

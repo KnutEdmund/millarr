@@ -24,10 +24,13 @@ bool load(uint8_t slot, Profile& out) {
   if (slot >= MAX_PROFILES) return false;
   const char* key = slotKey(slot);
   if (!prefs.isKey(key)) return false;
-  // A size mismatch also covers blobs saved by an older, smaller Profile layout
-  // (e.g. the 60-byte v1 struct): they are treated as empty slots, no migration.
-  if (prefs.getBytesLength(key) != sizeof(Profile)) return false;
-  prefs.getBytes(key, &out, sizeof out);
+  // v2 blobs (212 bytes) are upgraded in memory and rewritten on the next save.
+  // Any other size (e.g. the 60-byte v1 struct) is an empty slot, no migration.
+  unsigned char blob[sizeof(Profile)];
+  const size_t len = prefs.getBytesLength(key);
+  if (len == 0 || len > sizeof blob) return false;
+  prefs.getBytes(key, blob, len);
+  if (!speed_core::profileFromBlob(blob, len, out)) return false;
   return speed_core::validate(out) == nullptr;
 }
 

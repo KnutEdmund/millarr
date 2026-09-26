@@ -11,6 +11,31 @@ float beltLength(const Profile& p) {
   return sum;
 }
 
+float slatBeltLength(const Profile& p) { return p.slat_count * p.slat_pitch_m; }
+
+void seedEqualDistances(Profile& p, float belt_length_m) {
+  const uint8_t n = p.marks < 1 ? 1 : (p.marks > MAX_MARKS ? MAX_MARKS : p.marks);
+  for (uint8_t k = 0; k < MAX_MARKS; ++k) p.mark_distance_m[k] = k < n ? belt_length_m / n : 0.0f;
+}
+
+bool profileFromBlob(const void* data, size_t len, Profile& out) {
+  const unsigned char* bytes = static_cast<const unsigned char*>(data);
+  if (len == sizeof(Profile)) {
+    std::memcpy(&out, data, sizeof out);
+    return true;
+  }
+  if (len == PROFILE_V2_BLOB_SIZE && bytes[0] == 2) {
+    Profile p{};
+    std::memcpy(&p, data, PROFILE_V2_BLOB_SIZE);  // v3 is v2 plus trailing fields
+    p.version = PROFILE_VERSION;
+    p.slat_count = 0;
+    p.slat_pitch_m = 0.0f;
+    out = p;
+    return true;
+  }
+  return false;
+}
+
 bool validName(const char* s, size_t max_len_incl_nul) {
   size_t len = 0;
   while (len < max_len_incl_nul && s[len] != '\0') ++len;
@@ -63,9 +88,19 @@ const char* validate(const Profile& p) {
   if (notes_len >= PROFILE_NOTES_LEN) return "notes too long";
   if (notes_len > 0 && !validNotes(p.notes, PROFILE_NOTES_LEN)) return "notes has invalid characters";
   if (p.type != TreadmillType::Belt && p.type != TreadmillType::Slats) return "bad type";
+  const bool slats = p.type == TreadmillType::Slats;
+  if (slats) {
+    if (p.slat_count < MIN_SLAT_COUNT || p.slat_count > MAX_SLAT_COUNT) return "slat count must be 2..1000";
+    if (!(p.slat_pitch_m >= MIN_SLAT_PITCH_M && p.slat_pitch_m <= MAX_SLAT_PITCH_M)) return "slat pitch out of range";
+  }
   for (uint8_t k = 0; k < p.marks; ++k) {
     const float d = p.mark_distance_m[k];
     if (!(d >= MIN_MARK_DISTANCE_M && d <= MAX_MARK_DISTANCE_M)) return "distance out of range";  // NaN fails too
+  }
+  if (slats) {
+    const float expected = slatBeltLength(p);
+    const float diff = beltLength(p) - expected;
+    if (!((diff < 0 ? -diff : diff) <= expected * SLAT_SUM_TOLERANCE)) return "distances do not match slats";
   }
   return nullptr;
 }

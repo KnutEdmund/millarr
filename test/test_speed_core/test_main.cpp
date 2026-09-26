@@ -358,7 +358,8 @@ void test_json_profile() {
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
   TEST_ASSERT_EQUAL_STRING(
       "{\"id\":0,\"name\":\"Home treadmill\",\"notes\":\"\",\"type\":\"belt\",\"marks\":3,"
-      "\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820}",
+      "\"mark_distance_m\":[0.940,0.940,0.940],\"slat_count\":0,\"slat_pitch_m\":0.00000,"
+      "\"belt_length_m\":2.820}",
       buf);
 }
 
@@ -370,7 +371,8 @@ void test_json_profile_notes_newline_escaped() {
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
   TEST_ASSERT_EQUAL_STRING(
       "{\"id\":0,\"name\":\"Home treadmill\",\"notes\":\"first\\nsecond\",\"type\":\"belt\",\"marks\":3,"
-      "\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820}",
+      "\"mark_distance_m\":[0.940,0.940,0.940],\"slat_count\":0,\"slat_pitch_m\":0.00000,"
+      "\"belt_length_m\":2.820}",
       buf);
 }
 
@@ -560,8 +562,9 @@ void test_profile_parse_slot() {
 
 void test_profile_constants() {
   TEST_ASSERT_EQUAL_UINT8(20, MAX_PROFILES);
-  TEST_ASSERT_EQUAL_UINT8(2, PROFILE_VERSION);
-  TEST_ASSERT_EQUAL_UINT32(212, sizeof(Profile));
+  TEST_ASSERT_EQUAL_UINT8(3, PROFILE_VERSION);
+  TEST_ASSERT_EQUAL_UINT32(220, sizeof(Profile));
+  TEST_ASSERT_EQUAL_UINT32(212, PROFILE_V2_BLOB_SIZE);
 }
 
 void test_profile_belt_length_sums_only_used_marks() {
@@ -669,6 +672,88 @@ void test_stop_timeout_for_profile_uses_longest_mark() {
   TEST_ASSERT_UINT32_WITHIN(1, 5000000u, stopTimeoutFor(u, 0.5f, 3000000u, 15000000u));
 }
 
+// --- Slat treadmills: belt length = slat count x pitch ---
+
+static Profile slatProfile(const char* name, uint16_t count, float pitch, uint8_t marks) {
+  Profile p = makeDefaultProfile(name, 1.0f, marks);
+  p.type = TreadmillType::Slats;
+  p.slat_count = count;
+  p.slat_pitch_m = pitch;
+  seedEqualDistances(p, slatBeltLength(p));
+  return p;
+}
+
+void test_profile_slats_valid_and_belt_length() {
+  Profile p = slatProfile("Slat mill", 47, 0.0746f, 1);
+  TEST_ASSERT_NULL(validate(p));
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 3.5062f, slatBeltLength(p));
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 3.5062f, beltLength(p));
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 3.5062f, p.mark_distance_m[0]);
+  Profile two = slatProfile("Two", 47, 0.0746f, 2);
+  TEST_ASSERT_NULL(validate(two));
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 1.7531f, two.mark_distance_m[1]);
+}
+
+void test_profile_slats_validation() {
+  Profile p = slatProfile("S", 47, 0.0746f, 1);
+  Profile q = p; q.slat_count = 1;             TEST_ASSERT_EQUAL_STRING("slat count must be 2..1000", validate(q));
+  q = p; q.slat_count = 1001;                  TEST_ASSERT_EQUAL_STRING("slat count must be 2..1000", validate(q));
+  q = p; q.slat_pitch_m = 0.001f;              TEST_ASSERT_EQUAL_STRING("slat pitch out of range", validate(q));
+  q = p; q.slat_pitch_m = 0.6f;                TEST_ASSERT_EQUAL_STRING("slat pitch out of range", validate(q));
+  q = p; q.mark_distance_m[0] = 3.4f;          TEST_ASSERT_EQUAL_STRING("distances do not match slats", validate(q));
+  q = p; q.mark_distance_m[0] = 3.52f;         TEST_ASSERT_NULL(validate(q));  // within 0.5 %
+  // Belt profiles ignore the slat fields entirely.
+  Profile b = makeDefaultProfile("B", 2.82f, 3);
+  b.slat_count = 1; b.slat_pitch_m = 9.0f;
+  TEST_ASSERT_NULL(validate(b));
+  // Distance range is still checked first for slats.
+  q = p; q.mark_distance_m[0] = 0.01f; q.slat_count = 2; q.slat_pitch_m = 0.005f;
+  TEST_ASSERT_EQUAL_STRING("distance out of range", validate(q));
+}
+
+void test_profile_slats_calibrated_distances_pass() {
+  Profile p = slatProfile("S", 47, 0.0746f, 2);
+  p.mark_distance_m[0] = 1.70f;
+  p.mark_distance_m[1] = 1.8062f;  // sum 3.5062: calibration moved the split but kept the sum
+  TEST_ASSERT_NULL(validate(p));
+}
+
+void test_profile_v2_blob_upgrades_to_v3() {
+  Profile v3 = makeDefaultProfile("Old", 3.6f, 1);
+  std::strcpy(v3.notes, "kept");
+  unsigned char blob[PROFILE_V2_BLOB_SIZE];
+  std::memcpy(blob, &v3, PROFILE_V2_BLOB_SIZE);
+  blob[0] = 2;  // version byte of the stored v2 layout
+  Profile out{};
+  out.slat_count = 99; out.slat_pitch_m = 1.0f;  // must be cleared by the upgrade
+  TEST_ASSERT_TRUE(profileFromBlob(blob, sizeof blob, out));
+  TEST_ASSERT_EQUAL_UINT8(PROFILE_VERSION, out.version);
+  TEST_ASSERT_EQUAL_STRING("Old", out.name);
+  TEST_ASSERT_EQUAL_STRING("kept", out.notes);
+  TEST_ASSERT_EQUAL_UINT8(1, out.marks);
+  TEST_ASSERT_FLOAT_WITHIN(0.0005f, 3.6f, out.mark_distance_m[0]);
+  TEST_ASSERT_EQUAL_UINT16(0, out.slat_count);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, out.slat_pitch_m);
+  TEST_ASSERT_NULL(validate(out));
+  // Current-size blobs pass through unchanged; other sizes are rejected.
+  TEST_ASSERT_TRUE(profileFromBlob(&v3, sizeof v3, out));
+  TEST_ASSERT_EQUAL_STRING("Old", out.name);
+  TEST_ASSERT_FALSE(profileFromBlob(blob, 60, out));
+  blob[0] = 1;
+  TEST_ASSERT_FALSE(profileFromBlob(blob, sizeof blob, out));  // wrong version for that size
+}
+
+void test_json_profile_slats() {
+  Profile p = slatProfile("Slat mill", 47, 0.0746f, 1);
+  char buf[256];
+  int n = formatProfileJson(p, 4, buf, sizeof buf);
+  TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"id\":4,\"name\":\"Slat mill\",\"notes\":\"\",\"type\":\"slats\",\"marks\":1,"
+      "\"mark_distance_m\":[3.506],\"slat_count\":47,\"slat_pitch_m\":0.07460,\"belt_length_m\":3.506}",
+      buf);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -718,5 +803,10 @@ int main(int, char**) {
   RUN_TEST(test_engine_reset_clears_implausible);
   RUN_TEST(test_stop_timeout_from_geometry);
   RUN_TEST(test_stop_timeout_for_profile_uses_longest_mark);
+  RUN_TEST(test_profile_slats_valid_and_belt_length);
+  RUN_TEST(test_profile_slats_validation);
+  RUN_TEST(test_profile_slats_calibrated_distances_pass);
+  RUN_TEST(test_profile_v2_blob_upgrades_to_v3);
+  RUN_TEST(test_json_profile_slats);
   return UNITY_END();
 }
