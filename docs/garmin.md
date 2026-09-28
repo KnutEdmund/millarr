@@ -46,3 +46,29 @@ coming from the HRM 600 chest strap or the watch.
   meanwhile. Download closed sessions after the run.
 - `connects` in `/api/status` (and on the Bluetooth card) counts connections since
   boot. If it grows during a run, the link dropped and the watch reconnected.
+
+## Troubleshooting
+
+Look at the sensor's serial line (or `connects` in `/api/status`) before touching the
+firmware. The watch connecting and subscribing is visible there:
+
+```
+ble: connect peer=cb:93:e0:78:75:26 itvl=24 timeout=400 mtu=23
+ble: subscribe rsc_measurement=1
+ble: disconnect peer=cb:93:e0:78:75:26 reason=531 enc=0 bonded=0
+```
+
+- **Add New → Foot Pod says "No sensor found"** while the serial line shows a connect
+  and a subscribe: the watch already has `millarr` stored. Add New only lists new
+  sensors. Open **Sensors & Accessories** and look at the list instead.
+- **The stored `millarr` shows Searching** while the serial line shows connected and
+  notifications flowing: the watch's sensor layer is stuck. **Restart the watch.**
+  Nothing on the sensor side fixes this; five identical connections were rejected on
+  2026-09-28 until the watch was restarted, then it connected on its own
+  (`docs/results/2026-09-28-garmin-instinct-2.md`).
+- **Disconnect reason 531** (0x213) means the watch hung up; it is normal when the
+  watch leaves the sensor menu. **enc=0 bonded=0** is also normal: the Instinct 2 does
+  not pair with the pod.
+- **Pace off by a percent or two** at a known speed: check **Cal. Factor** on the watch;
+  a previous Calibrate & Save leaves it below or above 100.0.
+- The watch reconnects by itself within about ten seconds of the sensor rebooting.
