@@ -7,7 +7,8 @@ Dated, append-only. Newest first.
 - **No security configuration for the foot pod.** The Instinct 2 never requests pairing
   or encryption (`enc=0 bonded=0` on every connection); NimBLE defaults stay.
 - **RSC layout unchanged**: Feature 0x0004, Sensor Location 0 (other), cadence 0, no
-  total distance. The treadlink-style layout (0x0006, location 1, cadence 170, total
+  total distance. **Cadence 0 is accepted by the Instinct 2**: it shows pace from the
+  speed field alone, so the synthesized-cadence fallback from 2026-09-26 is retired. The treadlink-style layout (0x0006, location 1, cadence 170, total
   distance) was tested while the watch was stuck and made no difference; the watch was
   the fault (`docs/results/2026-09-28-garmin-instinct-2.md`).
 - **Connection trace on Serial is kept**: peer address, interval, MTU, disconnect

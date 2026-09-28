@@ -3,7 +3,8 @@
 The sensor is a Bluetooth LE foot pod (Running Speed and Cadence service). With
 GPS off, the Instinct 2 takes pace and distance from the pod instead of the wrist
 accelerometer. Cadence is deliberately not sent (the packet carries 0): it keeps
-coming from the HRM 600 chest strap or the watch.
+coming from the HRM 600 chest strap or the watch. Verified 2026-09-28: the Instinct 2
+shows pace from the speed field with cadence 0.
 
 ## Pairing (once)
 
