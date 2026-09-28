@@ -30,8 +30,8 @@ session log below. Both exports start with the same `#` metadata lines.
 ## Session files
 
 Every accepted pulse is also appended to `/log/NNNNNN.csv` on the LittleFS
-partition (1.4 MB; about 115 KB per hour at one mark and 10 km/h, so roughly 11 hours
-of the oldest sessions are kept). A session is one `seq` space: a new file starts at
+partition (1.9 MB; about 115 KB per hour at one mark and 10 km/h, so roughly 16 hours
+of the newest sessions are kept). A session is one `seq` space: a new file starts at
 boot and at `POST /api/reset`; the file is created on the first flush, so idle boots
 leave nothing behind. Writes happen from the main loop in batches of 16 records or
 every 5 s, never from the pulse path. When the partition is short of space or holds
@@ -57,7 +57,7 @@ seq,t_us,interval_us,mark,mark_speed_mps,rev_speed_mps
 `records` is exact for the active session only; for closed files estimate
 `(bytes − header) / 40`. `GET /api/sessions/{id}.csv` streams the file with a known
 `Content-Length` (filename `treadmill-session-000012.csv`); the active session is
-flushed first. The main loop is blocked while streaming (5–15 s for a full 1.4 MB
+flushed first. The main loop is blocked while streaming (5–20 s for a full 1.9 MB
 file), but pulses are drained into the engine between 2 KB chunks, so nothing is
 dropped; flash writes are held while the active file is read, so prefer downloading
 closed sessions during a run. Errors: `bad session id` (not 1–9 digits),
@@ -105,6 +105,7 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
  "log_size":13,"log_capacity":2048,"log_overwritten":0,"last_seq":13,"uptime_s":99,
  "flash":{"ok":true,"full":false,"total":1441792,"used":301056,"session_id":12,
  "session_records":1726,"session_bytes":69040,"write_errors":0,"sessions":3},
+ "ble":{"advertising":false,"connected":true,"connects":2,"notifications":1234,"last_speed_mps":2.500},
  "profile":{"id":1,"name":"Gym A"},
  "config":{"marks_count":3,"mark_distance_m":[0.940,0.940,0.940],"belt_length_m":2.820,
  "debounce_us":50000,"stop_timeout_us":7206000,"max_speed_mps":8.000}}
@@ -137,6 +138,12 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
   current session, `session_records` the records queued or written for it, and
   `session_bytes` its size on flash (updated at each flush, every 16 records or 5 s).
   `sessions` is the number of session files on flash.
+- `ble` is the Bluetooth LE foot pod (RSC service). `advertising` and `connected`
+  are exclusive: the sensor stops advertising while a watch or phone is connected
+  and resumes when it disconnects. `connects` counts connections since boot,
+  `notifications` the RSC measurements sent (one per second while connected), and
+  `last_speed_mps` the speed in the most recent one. None of these are reset by
+  `POST /api/reset`.
 - `profile` is the active profile's id and name.
 - `config` is the engine configuration currently in effect: the active profile's
   per-mark distances (`mark_distance_m[k]` = distance from mark `k` to mark `k+1`,

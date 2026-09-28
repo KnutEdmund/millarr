@@ -50,7 +50,9 @@ pio device monitor            # serial status line, 115200 baud
    profile survives power cycles. Settings also lets you download all profiles as
    a JSON backup and restore them onto the same or another sensor.
 4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
-5. After a run, download the session file from the Sessions table on the
+5. Pair a Garmin watch with the sensor as a Bluetooth foot pod (`docs/garmin.md`);
+   the watch then shows belt speed and distance with GPS off.
+6. After a run, download the session file from the Sessions table on the
    diagnostic page. A session starts at boot and at each reset; files carry the
    profile geometry and firmware hash in their header.
 
@@ -59,7 +61,7 @@ pio device monitor            # serial status line, 115200 baud
 | Path | What |
 |------|------|
 | `lib/speed_core/` | Pure C++ speed engine, log, profile model and formatters (unit-tested) |
-| `src/` | Firmware: ISR, Wi-Fi AP, HTTP server, ADC probe, `src/profile_store.cpp` (profiles and Wi-Fi settings in NVS), `src/flash_log.cpp` (session files on LittleFS) |
+| `src/` | Firmware: ISR, Wi-Fi AP, HTTP server, ADC probe, `src/profile_store.cpp` (profiles and Wi-Fi settings in NVS), `src/flash_log.cpp` (session files on LittleFS), `src/ble_rsc.cpp` (BLE foot pod via NimBLE) |
 | `web/index.html` | Diagnostic page, embedded into firmware at build time |
 | `web/settings.html` | Settings page: profile editor and Wi-Fi credentials, embedded at build time |
 | `test/` | Unity tests (`pio test -e native`) |
@@ -67,7 +69,8 @@ pio device monitor            # serial status line, 115200 baud
 
 ## Roadmap
 
-- **Milestone 2:** BLE RSC (foot pod) for Garmin watches, via NimBLE.
+- **Milestone 2 (BLE RSC foot pod for Garmin watches):** implemented, bench and
+  treadmill verification on the Instinct 2 pending (`docs/test-protocol.md` §5).
 - **Milestone 3 (profiles and web configuration):** done.
 
 ## License

@@ -77,15 +77,20 @@ Step-by-step field guide with the checks that catch the usual mistakes:
 ## Session log
 
 Every accepted pulse is also written to a session file on the ESP32's flash
-(LittleFS on the stock 1.4 MB `spiffs` partition), so a full training session
+(LittleFS on the 1.9 MB `spiffs` partition of the `no_ota.csv` table), so a full training session
 survives without a browser connected. A new session starts at boot and at each
 "Reset log" on the diagnostic page; files are listed, downloaded and deleted from
 the Sessions table there. Capacity is about 115 KB per hour at one mark and
-10 km/h (roughly 11 hours of the newest sessions; a 3-mark belt at 12 km/h uses
+10 km/h (roughly 16 hours of the newest sessions; a 3-mark belt at 12 km/h uses
 about 500 KB per hour), and the oldest closed sessions are evicted automatically.
 Writes happen from the main loop in batches every 16 records or 5 s, so at most 5 s
 of data is lost on power loss. `pio run -t erase` wipes the session log together
 with the profiles.
+
+## Garmin watch
+
+The sensor advertises as a Bluetooth LE foot pod; pairing and watch settings are
+in `docs/garmin.md`.
 
 ## Recovering Wi-Fi settings
 

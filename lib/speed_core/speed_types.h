@@ -95,4 +95,13 @@ struct FlashStatus {
   uint8_t sessions;          // files on flash, including the current one if created
 };
 
+// State of the BLE RSC foot pod, reported in /api/status. Counters are since boot.
+struct BleStatus {
+  bool advertising;
+  bool connected;
+  uint32_t connects;        // connections accepted since boot
+  uint32_t notifications;   // RSC measurements sent since boot
+  float last_speed_mps;     // speed in the last notification
+};
+
 }  // namespace speed_core

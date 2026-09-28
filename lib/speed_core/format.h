@@ -17,6 +17,7 @@ struct StatusExtras {
   uint8_t profile_id;
   const char* profile_name;  // already validated: no '"' or '\\'
   FlashStatus flash;
+  BleStatus ble;
 };
 
 // What goes at the top of every session file, before kCsvHeader.

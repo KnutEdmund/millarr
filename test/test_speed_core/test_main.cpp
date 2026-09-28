@@ -12,6 +12,7 @@
 #include "profile.h"
 #include "csv_batcher.h"
 #include "session.h"
+#include "rsc.h"
 
 using namespace speed_core;
 
@@ -339,10 +340,12 @@ void test_json_status_contains_all_fields() {
   s.log_overwritten = 0;
   s.last_seq = 13;
   EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
-  StatusExtras x{2, 99, 1, "Gym A", {}};
+  StatusExtras x{2, 99, 1, "Gym A", {}, {}};
   x.flash.ok = true; x.flash.full = false; x.flash.total_bytes = 1441792; x.flash.used_bytes = 301056;
   x.flash.session_id = 12; x.flash.session_records = 1726; x.flash.session_bytes = 69040;
   x.flash.write_errors = 0; x.flash.sessions = 3;
+  x.ble.advertising = false; x.ble.connected = true; x.ble.connects = 2;
+  x.ble.notifications = 1234; x.ble.last_speed_mps = 2.5f;
   char buf[1024];
   int n = formatStatusJson(s, c, x, buf, sizeof buf);
   TEST_ASSERT_TRUE(n > 0 && n < (int)sizeof buf);
@@ -353,6 +356,8 @@ void test_json_status_contains_all_fields() {
       "\"log_size\":13,\"log_capacity\":2048,\"log_overwritten\":0,\"last_seq\":13,\"uptime_s\":99,"
       "\"flash\":{\"ok\":true,\"full\":false,\"total\":1441792,\"used\":301056,\"session_id\":12,"
       "\"session_records\":1726,\"session_bytes\":69040,\"write_errors\":0,\"sessions\":3},"
+      "\"ble\":{\"advertising\":false,\"connected\":true,\"connects\":2,\"notifications\":1234,"
+      "\"last_speed_mps\":2.500},"
       "\"profile\":{\"id\":1,\"name\":\"Gym A\"},"
       "\"config\":{\"marks_count\":3,\"mark_distance_m\":[0.940,0.940,0.940],\"belt_length_m\":2.820,"
       "\"debounce_us\":50000,\"stop_timeout_us\":3000000,\"max_speed_mps\":0.000}}",
@@ -387,7 +392,7 @@ void test_json_profile_notes_newline_escaped() {
 void test_json_status_truncation_is_reported() {
   EngineStatus s{};
   EngineConfig c = makeEqualConfig(2.82f, 3, 50000u, 3000000u);
-  StatusExtras x{0, 0, 0, "x", {}};
+  StatusExtras x{0, 0, 0, "x", {}, {}};
   char buf[64];
   int n = formatStatusJson(s, c, x, buf, sizeof buf);
   TEST_ASSERT_TRUE(n >= (int)sizeof buf);   // caller must treat this as truncated
@@ -901,6 +906,67 @@ void test_parse_session_id() {
   TEST_ASSERT_FALSE(parseSessionId("-1", id));
 }
 
+// --- RSC measurement encoder ---
+
+static void encodeRsc(float speed_mps, uint8_t cadence, uint8_t out[RSC_MEASUREMENT_LEN], size_t& n) {
+  n = encodeRscMeasurement(makeRscMeasurement(speed_mps, cadence, 1.667f), out);
+}
+
+void test_rsc_encode_zero_speed() {
+  uint8_t out[RSC_MEASUREMENT_LEN];
+  size_t n;
+  encodeRsc(0.0f, 0, out, n);
+  TEST_ASSERT_EQUAL_size_t(4, n);
+  const uint8_t expect[4] = {0x00, 0x00, 0x00, 0x00};
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expect, out, 4);
+}
+
+void test_rsc_encode_running_speed_exact() {
+  uint8_t out[RSC_MEASUREMENT_LEN];
+  size_t n;
+  encodeRsc(2.778f, 0, out, n);   // 711.168 -> 711 = 0x02C7, running flag set
+  const uint8_t expect[4] = {0x04, 0xC7, 0x02, 0x00};
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expect, out, 4);
+}
+
+void test_rsc_encode_walking_below_threshold() {
+  uint8_t out[RSC_MEASUREMENT_LEN];
+  size_t n;
+  encodeRsc(1.0f, 0, out, n);
+  const uint8_t expect[4] = {0x00, 0x00, 0x01, 0x00};   // 256 = 0x0100
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(expect, out, 4);
+  encodeRsc(1.666f, 0, out, n);
+  TEST_ASSERT_EQUAL_UINT8(0x00, out[0]);
+  encodeRsc(1.667f, 0, out, n);
+  TEST_ASSERT_EQUAL_UINT8(RSC_FLAG_RUNNING, out[0]);
+}
+
+void test_rsc_encode_rounds_to_nearest() {
+  RscMeasurement m = makeRscMeasurement(0.01f, 0, 1.667f);   // 2.56 -> 3
+  TEST_ASSERT_EQUAL_UINT16(3, m.speed_q8);
+  m = makeRscMeasurement(0.001f, 0, 1.667f);                 // 0.256 -> 0
+  TEST_ASSERT_EQUAL_UINT16(0, m.speed_q8);
+}
+
+void test_rsc_encode_saturates_and_clamps() {
+  RscMeasurement m = makeRscMeasurement(300.0f, 0, 1.667f);  // 76800 > 65535
+  TEST_ASSERT_EQUAL_UINT16(0xFFFF, m.speed_q8);
+  TEST_ASSERT_EQUAL_UINT8(RSC_FLAG_RUNNING, m.flags);
+  m = makeRscMeasurement(-1.0f, 0, 1.667f);
+  TEST_ASSERT_EQUAL_UINT16(0, m.speed_q8);
+  TEST_ASSERT_EQUAL_UINT8(0, m.flags);
+  m = makeRscMeasurement(std::nanf(""), 0, 1.667f);
+  TEST_ASSERT_EQUAL_UINT16(0, m.speed_q8);
+  TEST_ASSERT_EQUAL_UINT8(0, m.flags);
+}
+
+void test_rsc_encode_cadence_passthrough() {
+  uint8_t out[RSC_MEASUREMENT_LEN];
+  size_t n;
+  encodeRsc(2.0f, 170, out, n);
+  TEST_ASSERT_EQUAL_UINT8(0xAA, out[3]);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -965,5 +1031,11 @@ int main(int, char**) {
   RUN_TEST(test_profile_comment_line);
   RUN_TEST(test_session_json_exact);
   RUN_TEST(test_parse_session_id);
+  RUN_TEST(test_rsc_encode_zero_speed);
+  RUN_TEST(test_rsc_encode_running_speed_exact);
+  RUN_TEST(test_rsc_encode_walking_below_threshold);
+  RUN_TEST(test_rsc_encode_rounds_to_nearest);
+  RUN_TEST(test_rsc_encode_saturates_and_clamps);
+  RUN_TEST(test_rsc_encode_cadence_passthrough);
   return UNITY_END();
 }

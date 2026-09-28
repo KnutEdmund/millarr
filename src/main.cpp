@@ -2,6 +2,7 @@
 
 #include "active_profile.h"
 #include "adc_probe.h"
+#include "ble_rsc.h"
 #include "config.h"
 #include "flash_log.h"
 #include "fw_version.h"
@@ -76,6 +77,7 @@ void setup() {
   profile_store::loadWifi(ssid, pass);
   wifi_ap::begin(ssid.c_str(), pass.c_str(), MDNS_HOSTNAME);
   web_server::begin(engine);
+  ble_rsc::begin(BLE_DEVICE_NAME, FW_GIT_HASH);
 }
 
 void loop() {
@@ -90,18 +92,21 @@ void loop() {
   watchBootButton();
 
   web_server::handle();
+  ble_rsc::service(millis(), engine.speedAt(micros()));
 
   uint32_t now_ms = millis();
   if (now_ms - last_status_ms >= STATUS_INTERVAL_MS) {
     last_status_ms = now_ms;
     EngineStatus s = engine.status(micros());
     const speed_core::FlashStatus f = flash_log::status();
+    const speed_core::BleStatus b = ble_rsc::status();
     Serial.printf("speed=%.2fkm/h dist=%.1fm pulses=%lu rev=%lu dropped=%lu rejected=%lu implausible=%lu"
-                  " flash=%s session=%lu records=%lu used=%luB\n",
+                  " flash=%s session=%lu records=%lu used=%luB ble=%s n=%lu\n",
                   (double)s.speed_mps * 3.6, (double)s.distance_m, (unsigned long)s.pulse_count,
                   (unsigned long)s.revolution_count, (unsigned long)pulse_isr::dropped(),
                   (unsigned long)(s.rejected_debounce + pulse_isr::rejected()),
                   (unsigned long)s.rejected_implausible, f.ok ? (f.full ? "full" : "ok") : "off",
-                  (unsigned long)f.session_id, (unsigned long)f.session_records, (unsigned long)f.used_bytes);
+                  (unsigned long)f.session_id, (unsigned long)f.session_records, (unsigned long)f.used_bytes,
+                  b.connected ? "conn" : (b.advertising ? "adv" : "off"), (unsigned long)b.notifications);
   }
 }

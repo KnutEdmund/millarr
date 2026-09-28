@@ -2,6 +2,18 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-28 (Garmin pairing)
+
+- **No security configuration for the foot pod.** The Instinct 2 never requests pairing
+  or encryption (`enc=0 bonded=0` on every connection); NimBLE defaults stay.
+- **RSC layout unchanged**: Feature 0x0004, Sensor Location 0 (other), cadence 0, no
+  total distance. The treadlink-style layout (0x0006, location 1, cadence 170, total
+  distance) was tested while the watch was stuck and made no difference; the watch was
+  the fault (`docs/results/2026-09-28-garmin-instinct-2.md`).
+- **Connection trace on Serial is kept**: peer address, interval, MTU, disconnect
+  reason with enc/bonded flags, RSC subscribe events. Printed from the NimBLE host task,
+  Serial only.
+
 ## 2026-09-28 (belt length provenance)
 
 - **Profile 2 `belt_length_m = 3.740` was a string around the outside of the loop**
@@ -26,6 +38,31 @@ Dated, append-only. Newest first.
   3.603 m in use on 2026-09-26. The console is what the sensor is meant to check,
   so it does not enter the estimate. At L = 3.600 the sensor reads +2.7 % vs
   console on all five session-12 plateaus.
+## 2026-09-26 (BLE RSC)
+
+- **Partition table `no_ota.csv`** (framework-shipped: one 2 MB app slot, 1.9 MB
+  `spiffs`, NVS unchanged) supersedes the stock table below. The firmware was 940 KB
+  in the 1.25 MB slot before NimBLE; OTA was never used. The LittleFS partition moved,
+  so it was formatted once (session files lost, NVS profiles kept).
+- **NimBLE-Arduino 2.5.1**, pinned exactly like the platform, peripheral role only,
+  one connection, logging off. Bluedroid rejected: about twice the flash and 100 KB
+  more RAM. Measured: firmware.bin 940 KB → 1,183 KB, static RAM +9 KB, heap
+  102 KB → 82 KB after `NimBLEDevice::init` and advertising.
+- **RSC only, minimal**: Feature 0x0004 (walking/running status), Sensor Location
+  Other, no Total Distance and therefore no SC Control Point (the watch integrates
+  speed and applies its own calibration factor; the sensor's distance is in the
+  session log). Device Information carries the firmware git hash.
+- **Cadence 0 on purpose**: the runner's cadence comes from the HRM 600 or the watch
+  and a belt sensor cannot measure it. Agreed fallback if the watch rejects cadence
+  0: synthesize it from speed (one constant, `RSC_CADENCE_SPM`), accepting that
+  the pod then overrides the HRM cadence.
+- **One packet per second from `loop()`**, also at 0 m/s, speed = `speedAt()` (newest
+  revolution speed, held until the derived stop timeout). Running flag at 6 km/h.
+- **Encoder in `speed_core` (`rsc.{h,cpp}`), NimBLE glue in `src/ble_rsc`.** NimBLE
+  callbacks run on the host task and touch atomics only; the engine, Serial,
+  LittleFS and NVS stay on `loop()`.
+- **Soft-AP and BLE always on**, Wi-Fi started first. `WiFi.setSleep(false)` is
+  forbidden: with both radios up it aborts in coexistence init.
 
 ## 2026-09-26 (field-run fixes)
 

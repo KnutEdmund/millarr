@@ -30,3 +30,9 @@
 // --- Serial ---
 #define SERIAL_BAUD 115200
 #define STATUS_INTERVAL_MS 1000
+
+// --- Bluetooth LE (RSC foot pod) ---
+#define BLE_DEVICE_NAME "millarr"
+#define RSC_NOTIFY_INTERVAL_MS 1000
+#define RSC_RUNNING_MIN_MPS 1.667f   // running flag at and above 6 km/h
+#define RSC_CADENCE_SPM 0            // cadence comes from the HRM/watch, never from the belt

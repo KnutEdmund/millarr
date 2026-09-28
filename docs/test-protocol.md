@@ -67,6 +67,34 @@ Repeat step 3 at two speeds with a runner on the belt. Expect a higher std dev
 (belt slip under foot strike) and a slightly lower mean than without a runner.
 Both are real effects, not sensor error.
 
+## 5. Garmin Instinct 2
+
+Bench first, with nRF Connect on a phone (belt stopped): the sensor is listed as
+`millarr` with a running/walking appearance and service 0x1814 in the
+advertisement; RSC Feature (0x2A54) reads `04 00`, Sensor Location (0x2A5D) reads
+`00`; enabling notifications on RSC Measurement (0x2A53) gives `00 00 00 00` once
+per second; sweeping a card past the sensor three times about 0.5 s apart on the
+3-mark default profile gives a packet with the running flag and a non-zero speed;
+disconnecting restarts advertising within a second and reconnecting increments
+`connects` in `/api/status`; downloading a closed session while connected keeps the
+connection; saving Wi-Fi settings while connected does not crash the sensor.
+
+Then on the treadmill, paired per `docs/garmin.md`, with the HRM 600 worn:
+
+- Treadmill activity of at least 30 minutes, GPS off, Cal. Factor 100.0, auto
+  calibration off, **Reset log** on the diagnostic page at the moment of start,
+  **Save** (not Calibrate & Save) at the end.
+- Watch distance within 1 % of `distance_m` in `/api/status` (and of the session
+  file's total) at the moment of stop.
+- Cadence in Garmin Connect still comes from the HRM 600 (compare with a run
+  without the pod if in doubt).
+- `connects` stays at 1 for the whole activity (no dropouts) and the diagnostic
+  page is usable throughout, including one closed-session download.
+- Results go to `docs/results/<date>-garmin-instinct-2.md` and must answer: does
+  the watch accept cadence 0 (speed displayed and non-zero)? Does the pod's cadence
+  override the HRM 600? Do the Indoor/Always and Cal. Factor menus exist on Instinct
+  2 firmware? Any dropouts? Firmware and heap size with BLE.
+
 ## Acceptance for Milestone 2
 
 - Std dev of revolution speed < 1.5 % at constant speed, no runner.
@@ -75,3 +103,4 @@ Both are real effects, not sensor error.
   one mark late and the affected revolution reads roughly one mark-distance short.
 - Mark-share deviations documented (they will be used for per-mark calibration).
 - Sensor mean within 3 % of console at every step, or the offset is explained.
+- Section 5 passes on the Instinct 2.
