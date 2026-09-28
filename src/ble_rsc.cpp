@@ -29,14 +29,33 @@ float last_speed_mps = 0.0f;
 uint32_t last_notify_ms = 0;
 bool was_connected = false;
 
+// Connection tracing on Serial. Runs on the NimBLE host task; Serial only, no shared
+// state beyond the atomics above. Kept after the 2026-09-28 pairing investigation: the
+// peer address and disconnect reason are what tell a stuck watch from a sensor fault.
 class ServerCallbacks : public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer*, NimBLEConnInfo&) override { connects.fetch_add(1); }
-  void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int reason) override {
+  void onConnect(NimBLEServer*, NimBLEConnInfo& ci) override {
+    connects.fetch_add(1);
+    Serial.printf("ble: connect peer=%s itvl=%u timeout=%u mtu=%u\n", ci.getAddress().toString().c_str(),
+                  ci.getConnInterval(), ci.getConnTimeout(), ci.getMTU());
+  }
+  void onDisconnect(NimBLEServer*, NimBLEConnInfo& ci, int reason) override {
     last_disconnect_reason.store(reason);
+    Serial.printf("ble: disconnect peer=%s reason=%d enc=%d bonded=%d\n", ci.getAddress().toString().c_str(), reason,
+                  ci.isEncrypted(), ci.isBonded());
+  }
+  void onAuthenticationComplete(NimBLEConnInfo& ci) override {
+    Serial.printf("ble: auth enc=%d bonded=%d\n", ci.isEncrypted(), ci.isBonded());
+  }
+};
+
+class MeasurementCallbacks : public NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic*, NimBLEConnInfo&, uint16_t subValue) override {
+    Serial.printf("ble: subscribe rsc_measurement=%u\n", subValue);
   }
 };
 
 ServerCallbacks callbacks;
+MeasurementCallbacks measurement_callbacks;
 
 bool connected() { return server != nullptr && server->getConnectedCount() > 0; }
 
@@ -51,6 +70,7 @@ void begin(const char* name, const char* fw_hash) {
 
   NimBLEService* rsc = server->createService(NimBLEUUID((uint16_t)0x1814));
   measurement = rsc->createCharacteristic(NimBLEUUID((uint16_t)0x2A53), NIMBLE_PROPERTY::NOTIFY);
+  measurement->setCallbacks(&measurement_callbacks);
   const uint8_t feature[2] = {(uint8_t)(speed_core::RSC_FEATURE_WALK_RUN_STATUS & 0xFF),
                               (uint8_t)(speed_core::RSC_FEATURE_WALK_RUN_STATUS >> 8)};
   rsc->createCharacteristic(NimBLEUUID((uint16_t)0x2A54), NIMBLE_PROPERTY::READ)->setValue(feature, sizeof feature);
