@@ -22,7 +22,8 @@ distances but keeps their sum.
 - **Slat treadmill:** never use a tape or a string around the loop (it follows the
   slat tops and over-measures by about 2π·h). Count the slats over one revolution
   and measure 20 pitches mid-flat, then enter count and pitch with `type=slats`;
-  see `docs/hardware.md`, "Slat belts". `/api/profiles` shows `slat_count`,
+  see `docs/hardware.md`, "Slat belts", and the field guide
+  `docs/slat-pitch-measurement.md`. `/api/profiles` shows `slat_count`,
   `slat_pitch_m` and the resulting `belt_length_m`.
 
 1. Create or select a profile for this treadmill on the **Settings** page.

@@ -71,6 +71,9 @@ Measure it on the top side only, with no assumptions about the ends:
 The sensor still reads painted marks on a slat belt; the slat count and pitch only
 replace the tape measurement.
 
+Step-by-step field guide with the checks that catch the usual mistakes:
+`docs/slat-pitch-measurement.md`.
+
 ## Session log
 
 Every accepted pulse is also written to a session file on the ESP32's flash
