@@ -2,6 +2,31 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-28 (belt length provenance)
+
+- **Profile 2 `belt_length_m = 3.740` was a string around the outside of the loop**
+  (measured 2026-09-28, about 374 cm), the method the 2026-09-26 rule forbids. Kept
+  here as provenance only; it is not a calibration value. **Profile 2 carries an
+  estimated pitch meanwhile: `type=slats`, 60 × 0.0600 m = 3.600 m**, flagged as
+  estimated in the profile notes until the 20-pitch measurement replaces it.
+- **Slat count is 60** (same day). Slats are about 6 cm wide with a bevelled edge
+  and roughly 0.5 cm overlap, so the visible top of each slat is about 5.5 cm.
+  60 × 6.0 = 3.60 m reproduces the 3.603 m previously in use; 60 × 5.5 = 3.30 m
+  does not. The two measurements are not averaged: their difference is 2π·h, and it
+  discriminates. 374 − 360 = 14 cm gives h ≈ 2.2 cm (a slat); 374 − 330 = 44 cm
+  gives h ≈ 7 cm (not a slat). The string therefore favours pitch 6.0 over 5.5.
+- **Pitch is measured, not inferred from slat width and overlap**: leading edge of
+  slat 1 to leading edge of slat 21 mid-flat, divided by 20 (`docs/hardware.md`,
+  "Slat belts"), plus h with a ruler at the drum as the check on the string. An
+  honest console needs 3.504 m, i.e. pitch 5.84 cm, which "about 6" and "about 0.5"
+  cannot exclude. Nothing is recaptured: session 12 rescales by L_new / 3.740.
+- **Interim pitch estimate 0.0600 m (±0.001)** from geometry only, never from the
+  console: the string minus 2π·h for any plausible slat height (h 1.5–3.0 cm) gives
+  5.92–6.08 cm, the slat width by eye gives about 6.0, and both agree with the
+  3.603 m in use on 2026-09-26. The console is what the sensor is meant to check,
+  so it does not enter the estimate. At L = 3.600 the sensor reads +2.7 % vs
+  console on all five session-12 plateaus.
+
 ## 2026-09-26 (field-run fixes)
 
 - **Session log on LittleFS as CSV text**, one file per seq space (boot or reset),
