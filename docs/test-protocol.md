@@ -79,7 +79,9 @@ disconnecting restarts advertising within a second and reconnecting increments
 `connects` in `/api/status`; downloading a closed session while connected keeps the
 connection; saving Wi-Fi settings while connected does not crash the sensor.
 
-Then on the treadmill, paired per `docs/garmin.md`, with the HRM 600 worn:
+Then on the treadmill, paired per `docs/garmin.md`, with the HRM 600 worn **and
+paired as heart rate only** (Add New → Heart Rate, not Search All; see "HRM 600 and
+the foot pod compete for pace and distance" in `docs/garmin.md`):
 
 - Treadmill activity of at least 30 minutes, GPS off, Cal. Factor 100.0, auto
   calibration off, **Reset log** on the diagnostic page at the moment of start,

@@ -48,6 +48,38 @@ shows pace from the speed field with cadence 0.
 - `connects` in `/api/status` (and on the Bluetooth card) counts connections since
   boot. If it grows during a run, the link dropped and the watch reconnected.
 
+## HRM 600 and the foot pod compete for pace and distance
+
+The HRM 600 (like HRM-Pro and HRM-Fit) has its own **Pace & Distance** feature: it
+estimates treadmill pace from torso motion and sends it to the watch over ANT+. When
+it is paired with all features, the watch has two indoor pace sources, and Garmin's
+own manual for the Instinct 2 resolves that by telling you to disable the *foot pod*:
+"If you previously connected a compatible foot pod ... set the foot pod status to Off,
+or remove it from the list of connected sensors" (Instinct 2 Owner's Manual, "Tips for
+Recording Running Pace and Distance"). Stryd documents the same conflict from the
+pod's side: the HRM's pace and distance take precedence, and the fix is to connect the
+HRM "only as a heart rate monitor".
+
+For this project the pod is the pace source, so the HRM 600 must be paired as
+**heart rate only**:
+
+1. **Sensors & Accessories** → open the HRM 600 entry → **Remove**.
+2. **Add New** → choose **Heart Rate** (or "External Heart Rate"), **not Search All**.
+   Search All pairs the strap with running dynamics, running power and Pace &
+   Distance; the Heart Rate sensor type pairs it for heart rate alone.
+3. Check the strap's entry afterwards: no **HRM Pace & Distance** submenu should be
+   present. If one is, and it offers Speed/Distance options, set both to **Off**.
+
+Running power and running dynamics from the strap are lost with this pairing; that
+is the trade. Cadence: the HRM 600 still transmits cadence on the heart-rate
+profile; whether the pod's cadence 0 overrides it is the open question in
+`docs/test-protocol.md`, section 5.
+
+This was the situation in session 24 (2026-09-29): first run with the HRM 600 and
+the pod together, per-lap running power present in the activity (so the strap was
+paired with full features), and the pod never connected. The bench pairing two
+days earlier, with no strap, worked.
+
 ## Troubleshooting
 
 Look at the sensor's serial line (or `connects` in `/api/status`) before touching the
@@ -59,6 +91,10 @@ ble: subscribe rsc_measurement=1
 ble: disconnect peer=cb:93:e0:78:75:26 reason=531 enc=0 bonded=0
 ```
 
+- **The pod never connects during a treadmill activity while the HRM 600 is worn**,
+  and the bench pairing worked: the strap is paired with Pace & Distance. Re-pair it
+  as heart rate only (section above). Do this before suspecting the sensor or
+  restarting the watch.
 - **Add New → Foot Pod says "No sensor found"** while the serial line shows a connect
   and a subscribe: the watch already has `millarr` stored. Add New only lists new
   sensors. Open **Sensors & Accessories** and look at the list instead.
