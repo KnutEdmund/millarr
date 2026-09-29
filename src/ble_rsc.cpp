@@ -84,16 +84,27 @@ void begin(const char* name, const char* fw_hash) {
 
   server->start();
 
+  // Advertising payload in this exact order: flags, 16-bit service UUID list,
+  // appearance, name. Garmin's Connect IQ BLE scanner drops the service UUIDs when the
+  // UUID list is the last AD element (Garmin bug WERETECH-9123, open since 2020), and
+  // it never reads scan responses, so everything a data field needs has to sit early
+  // in the primary advertisement. 20 bytes, fits the 31-byte limit.
+  NimBLEAdvertisementData adv_data;
+  adv_data.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
+  adv_data.addServiceUUID(NimBLEUUID((uint16_t)0x1814));
+  adv_data.setAppearance(kAppearanceInShoeSensor);
+  adv_data.setName(name);
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-  adv->setName(name);
-  adv->setAppearance(kAppearanceInShoeSensor);
-  adv->addServiceUUID(NimBLEUUID((uint16_t)0x1814));
+  adv->setAdvertisementData(adv_data);
   adv->enableScanResponse(true);
   adv->setMinInterval(kAdvMinInterval);
   adv->setMaxInterval(kAdvMaxInterval);
   const bool ok = adv->start();
   Serial.printf("ble: %s as '%s' fw=%s heap %lu -> %lu\n", ok ? "advertising" : "advertising FAILED", name,
                 fw_hash, (unsigned long)heap_before, (unsigned long)ESP.getFreeHeap());
+  Serial.print("ble: adv payload=");
+  for (uint8_t b : adv_data.getPayload()) Serial.printf("%02x ", b);
+  Serial.println();
 }
 
 void service(uint32_t now_ms, float speed_mps) {

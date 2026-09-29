@@ -2,6 +2,24 @@
 
 Dated, append-only. Newest first.
 
+## 2026-09-29 (data field route, advertising order)
+
+- **The belt speed goes into the activity as a Connect IQ developer field, not as the
+  watch's pace.** The HRM 600's Pace & Distance feature competes with a foot pod for
+  the native pace slot, and the strap's running power and dynamics are worth more
+  than replacing an estimated pace. The pod stays a standard RSC peripheral; a data
+  field (ExtraSensor from the Connect IQ store, closed source, or a project field
+  later) connects to it and records speed to FIT. The native foot-pod pairing remains
+  supported and documented for anyone without such a strap.
+- **Advertising payload order is fixed: flags, 16-bit service UUID list, appearance,
+  name.** Garmin's Connect IQ scanner drops the service UUIDs when the UUID list is
+  the last AD element (WERETECH-9123, open since 2020) and never reads scan
+  responses, so a data field could not find the sensor with NimBLE's default order
+  (name first, UUIDs last). The payload is printed on boot (`ble: adv payload=`).
+- **The sensor must be removed from the watch's own sensor list while a data field
+  uses it**: one connection at a time, and the native stack reconnects within a
+  minute of every sensor boot if the pod is still stored.
+
 ## 2026-09-28 (Garmin pairing)
 
 - **No security configuration for the foot pod.** The Instinct 2 never requests pairing

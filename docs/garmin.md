@@ -6,7 +6,52 @@ accelerometer. Cadence is deliberately not sent (the packet carries 0): it keeps
 coming from the HRM 600 chest strap or the watch. Verified 2026-09-28: the Instinct 2
 shows pace from the speed field with cadence 0.
 
-## Pairing (once)
+## Two ways to get belt speed onto the watch
+
+| | Native foot pod (sections below) | Connect IQ data field |
+|---|---|---|
+| Watch pace and distance | from the pod | from the HRM 600 / wrist, as before |
+| Belt speed in the activity | as the pace itself | as a developer field (chart in Garmin Connect) |
+| HRM 600 | must be paired as heart rate only (loses running power and dynamics) | fully paired, nothing lost |
+| Cadence | pod sends 0; whether it overrides the strap is untested | untouched |
+| Sensor list on the watch | `millarr` paired as Foot Pod | `millarr` **removed** (the field connects itself) |
+
+The data field route was chosen on 2026-09-29 (`LEDGER.md`). It keeps every metric
+from the strap and adds the belt speed next to them. The pace shown in Garmin
+Connect stays the strap's estimate; the belt speed is the extra curve.
+
+### Data field setup (ExtraSensor, Connect IQ store)
+
+ExtraSensor (closed source, free) connects to BLE running speed sensors from inside
+an activity and records them to FIT. Verified on the Instinct 2 on 2026-09-29.
+
+1. **Sensors & Accessories → `millarr` → Remove.** Not Off: the native stack
+   reconnects to a stored pod within a minute of every sensor boot and takes the
+   single connection.
+2. Install ExtraSensor from the Connect IQ store. Configure it in the **Connect IQ
+   app** on the phone (not Garmin Connect), with the watch connected: sensor 1
+   Type = Running Speed (BLE), ID field empty, Data Screen = speed or pace,
+   Record to FIT on. **Save** and wait for the sync. If the settings do not stick,
+   uninstall and reinstall the field; the README calls this a known Garmin bug, and
+   it took a reinstall here.
+3. Add the field to the Treadmill activity's data screens (Connect IQ Fields →
+   ExtraSensor).
+4. Open the activity. The field goes `NEW` → `PAIR` → `ON`, then shows speed. The
+   sensor's serial line shows the connect and the subscribe about ten seconds
+   later, from the watch's usual address.
+
+### Why the advertising order matters
+
+Connect IQ's BLE scanner only reads the primary advertisement, never the scan
+response, and it loses the service UUID list when that list is the last element
+of the packet (Garmin bug WERETECH-9123). The sensor therefore advertises
+`flags, 0x1814, appearance, name` in that order, and prints the bytes on boot:
+
+```
+ble: adv payload=02 01 06 03 03 14 18 03 19 41 04 08 09 6d 69 6c 6c 61 72 72
+```
+
+## Native foot pod: pairing (once)
 
 1. Power the sensor. The serial line and the diagnostic page show `advertising`.
    Only one phone or watch can be connected at a time, so disconnect nRF Connect
