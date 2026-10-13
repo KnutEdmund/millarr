@@ -4,6 +4,9 @@
 
 ![millarr: optical belt sensor, live web dashboard, and measured belt speed next to the watch's estimated pace in Garmin Connect](docs/images/millarr-overview.jpg)
 
+*Concept illustration. The values in it are not measurements; the Garmin charts
+below are real data from a field run.*
+
 millarr is a self-powered ESP32 sensor that measures the **actual belt movement**
 of a treadmill with an IR reflective sensor and a mark on the belt. It broadcasts
 belt speed over Bluetooth LE as a foot pod, so a Garmin watch records the real
@@ -13,11 +16,11 @@ heart-rate strap.
 
 ## Why
 
-A treadmill console shows the speed the motor is told to run, not the speed the
-belt actually moves. Calibration, belt length and slat geometry all shift the two
-apart, and the watch's own pace on a treadmill is an estimate from arm and foot
-motion. millarr gives an independent measurement: every belt revolution is timed,
-recorded and available for analysis afterwards.
+A treadmill console may report the commanded speed rather than an independently
+measured belt speed, and calibration drifts from machine to machine. The watch's
+own pace on a treadmill is an estimate from arm and foot motion. millarr gives an
+independent measurement: every belt revolution is timed, recorded and available
+for analysis afterwards.
 
 The same interval session in Garmin Connect, as the watch estimated it and as
 millarr measured it:
