@@ -18,9 +18,10 @@ NVS across power cycles.
 - ESP32 dev board (38-pin, CP2102, USB-C)
 - TCRT5000 IR reflective sensor module (DO → GPIO18, AO → GPIO34)
 - WeMos 18650 battery shield V3 + 18650 cell
-- One to eight white correction-fluid marks on the belt, 15 mm diameter (three,
-  equidistant, is the default). Slat belts work the same way; their length is
-  entered as slat count × pitch, never measured with a tape
+- One to eight white marks on the belt. All field runs so far use a single strip
+  of white tape; the firmware's first-boot default is three equidistant marks.
+  Slat belts work the same way; their length is entered as slat count × pitch,
+  never measured with a tape
 
 See `docs/hardware.md` for wiring and belt marking.
 

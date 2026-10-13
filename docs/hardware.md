@@ -14,12 +14,15 @@ cable powers the board; do not feed 5 V from both at once.
 
 ## Belt marks
 
-- White correction fluid, three round marks ≈ 15 mm diameter.
-- Spacing: belt length / 3, measured with a tape along the belt edge (belt
-  treadmills; for slat belts see below). Mark the positions before painting.
-  Unequal spacing does not affect revolution speed but shows up in the mark-share
-  bars on the web page. One mark is enough for speed and distance; more marks give
-  faster stop detection and per-mark statistics.
+- A strip of white tape across the direction of travel. All field runs so far
+  (sessions 1–38) use a single tape mark. White correction fluid should work the
+  same way but has not been tried.
+- One mark is enough for speed and distance; more marks give faster stop
+  detection and per-mark statistics. With several marks, space them at belt
+  length / count, measured with a tape along the belt edge (belt treadmills; for
+  slat belts see below), and mark the positions before applying. Unequal spacing
+  does not affect revolution speed but shows up in the mark-share bars on the web
+  page. The firmware's first-boot default profile assumes three marks.
 - Location: a few centimetres from the belt edge, on the stretch that slides over
   the deck near the front motor cover, where the belt does not flap.
 
@@ -58,7 +61,7 @@ the height from the neutral line to the slat surface: about 10 cm for h ≈ 16 m
 Measure it on the top side only, with no assumptions about the ends:
 
 1. **Count the slats** over one full revolution. Jog the belt slowly by hand or at
-   the lowest speed and use the painted sensor mark as the start/stop reference.
+   the lowest speed and use the sensor mark as the start/stop reference.
    This is an integer with zero error.
 2. **Measure the pitch over a long baseline** in the middle of the flat section,
    where the slats sit at exactly the chain pitch (they only splay near the drums):
@@ -68,7 +71,7 @@ Measure it on the top side only, with no assumptions about the ends:
    `type=slats`; the page computes the belt length and seeds the mark distances.
    Calibration ("Use measured distances") still works on top of it.
 
-The sensor still reads painted marks on a slat belt; the slat count and pitch only
+The sensor still reads the tape mark on a slat belt; the slat count and pitch only
 replace the tape measurement.
 
 Step-by-step field guide with the checks that catch the usual mistakes:
