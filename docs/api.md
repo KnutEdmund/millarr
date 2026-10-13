@@ -123,11 +123,15 @@ delete the last remaining profile), then `erase failed` (`500`, NVS write failed
   accumulated once the phase is locked.
 - `rev_speed_stddev` is over the same 10 revolutions, in m/s.
 - `rejected_debounce` counts pulses closer than `debounce_us` to the previous one (ISR
-  and engine rules combined). `rejected_implausible` counts pulses that would imply a
-  speed above `config.max_speed_mps` over the shortest mark distance; they are dropped
-  before they reach the log, the statistics window and the distance sum. A single
-  rejected pulse at start-up is normal (sensor settling); a growing count during a run
-  means a mark is double-triggering.
+  and engine rules combined). `rejected_implausible` counts edges that came closer to
+  another edge than `config.max_speed_mps` allows over the shortest mark distance. Of
+  such a pair one edge is kept and the other dropped before it reaches the log, the
+  statistics window and the distance sum: the one whose interval fits the current
+  speed, or the first one when there is no speed yet. Each pulse is therefore held
+  back for that minimum gap (about 0.45 s on a 3.6 m one-mark belt) before it is
+  logged. A single rejected pulse at start-up is normal (sensor settling); a growing
+  count during a run means a mark is double-triggering or something else on the belt
+  reflects.
 - `log_size` / `log_capacity` / `log_overwritten` describe the RAM ring that feeds
   `/api/pulses.json` and `/api/pulses.csv` (2048 records, about 44 minutes at one
   mark and 10 km/h). The flash session log below is not limited by it.

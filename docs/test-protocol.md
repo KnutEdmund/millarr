@@ -47,7 +47,9 @@ holds the last 2048 records.
    prints nothing.
 3. `isr_dropped` in `/api/status` is still 0 after the download.
 4. `rejected_implausible` should be 0 or a single start-up pulse; more than that
-   during a run means a mark is double-triggering.
+   during a run means a mark is double-triggering or something else on the belt
+   reflects. The engine keeps the edge that fits the current speed, so the speed
+   stays right, but the count is worth explaining in the results.
 
 ## 3. Treadmill, no runner
 

@@ -2,6 +2,19 @@
 
 Dated, append-only. Newest first.
 
+## 2026-10-13 (spurious edges)
+
+- **Of two edges closer than the minimum gap, the engine keeps the one that fits the
+  current speed**, not always the first. A reflection about 1.1 m ahead of the tape
+  produced early edges at 14+ km/h (six in one session); the first-wins rule kept the
+  spurious edge and dropped the real mark, giving one revolution up to 45 % fast and the
+  next 25 % slow. Without a speed yet (start of a run) the first edge still wins.
+- **Every pulse is held back for the minimum gap before it is logged** (about 0.45 s
+  on a 3.6 m one-mark belt), committed by the next pulse or by `tick()`. The added
+  latency is below one revolution and well inside the watch's update rate; it keeps
+  the log, flash file, distance and BLE speed free of edges that are later replaced,
+  so nothing has to be rolled back.
+
 ## 2026-09-29 (data field route, advertising order)
 
 - **The belt speed goes into the activity as a Connect IQ developer field, not as the
