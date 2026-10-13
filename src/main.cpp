@@ -92,6 +92,7 @@ void loop() {
   flash_log::observe(engine.log());  // tick() may commit a held-back pulse
   watchBootButton();
 
+  wifi_ap::service();
   web_server::handle();
   ble_rsc::service(millis(), engine.speedAt(micros()));
 

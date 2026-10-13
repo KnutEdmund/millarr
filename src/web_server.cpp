@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <WebServer.h>
+#include <WiFi.h>
 #include <uri/UriBraces.h>
 
 #include <cstring>
@@ -186,7 +187,22 @@ void handleSessionDelete() {
   sendJson(200, "{\"ok\":true}");
 }
 
+// A request for a host other than the sensor is a phone or laptop probing for
+// internet access (captive.apple.com, connectivitycheck.gstatic.com, ...): the
+// wildcard DNS sent it here. Redirecting it to the dashboard makes the OS show
+// its sign-in sheet with the page open, over plain HTTP. Unknown paths on the
+// sensor itself still get a 404.
 void handleNotFound() {
+  const String ip = WiFi.softAPIP().toString();
+  String host = server.hostHeader();
+  host.toLowerCase();
+  const int colon = host.indexOf(':');
+  if (colon >= 0) host.remove(colon);
+  if (host.length() > 0 && host != ip && host != MDNS_HOSTNAME ".local") {
+    server.sendHeader("Location", "http://" + ip + "/", true);
+    server.send(302, "text/plain", "");
+    return;
+  }
   server.send(404, "text/plain", "not found");
 }
 
