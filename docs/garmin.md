@@ -23,8 +23,12 @@ Connect stays the strap's estimate; the belt speed is the extra curve.
 What that looks like for an 8 × 2 min interval session recorded through the data
 field (2026-10-13): the watch's pace wanders within each interval, while the
 developer field shows the belt's actual speed steps. The brief spikes above
-20 km/h in the speed chart are mark-timing glitches at high speed, known and
-under investigation.
+20 km/h in the speed chart are mark-timing glitches. Their mechanism is known: a
+reflective spot on the belt about 1.1 m ahead of the mark sometimes triggers an
+early edge, so one revolution is timed short and reads about 40 % fast; the real
+mark then arrives too soon after it and is rejected as implausible, and the next
+revolution reads normally again. A fix (in the belt marking or in the engine) is
+open.
 
 ![Garmin Connect pace chart, estimated by the watch and HRM 600](images/garmin-pace-estimated.png)
 
