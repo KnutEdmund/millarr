@@ -1,8 +1,9 @@
 # Treadmill Belt Speed Sensor
 
 A self-powered ESP32 sensor that measures **actual belt movement** on a treadmill
-with an IR reflective sensor and marks on the belt, and (in a later milestone)
-broadcasts Bluetooth LE Running Speed and Cadence to watches and apps.
+with an IR reflective sensor and marks on the belt, and broadcasts it over
+Bluetooth LE as a Running Speed and Cadence sensor so a Garmin watch can record
+the real belt speed in the activity.
 
 The device timestamps every mark pulse to the microsecond, computes revolution-based
 speed with per-mark distance correction, hosts its own Wi-Fi access point, and serves
@@ -51,8 +52,15 @@ pio device monitor            # serial status line, 115200 baud
    profile survives power cycles. Settings also lets you download all profiles as
    a JSON backup and restore them onto the same or another sensor.
 4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
-5. Pair a Garmin watch with the sensor as a Bluetooth foot pod (`docs/garmin.md`);
-   the watch then shows belt speed and distance with GPS off.
+5. Get the belt speed onto a Garmin watch (`docs/garmin.md`). Two routes:
+   - **Connect IQ data field (recommended):** install ExtraSensor from the
+     Connect IQ store and let it connect to the sensor from inside the activity.
+     Belt speed is recorded as a developer field next to the watch's own pace,
+     and an HRM strap keeps running power and dynamics. Verified on the
+     Instinct 2.
+   - **Native foot pod:** pair the sensor as a Bluetooth foot pod; belt speed
+     and distance replace the watch's pace. Simpler, but an HRM 600 must then be
+     paired as heart rate only.
 6. After a run, download the session file from the Sessions table on the
    diagnostic page. A session starts at boot and at each reset; files carry the
    profile geometry and firmware hash in their header.
@@ -70,8 +78,9 @@ pio device monitor            # serial status line, 115200 baud
 
 ## Roadmap
 
-- **Milestone 2 (BLE RSC foot pod for Garmin watches):** implemented, bench and
-  treadmill verification on the Instinct 2 pending (`docs/test-protocol.md` §5).
+- **Milestone 2 (BLE RSC foot pod for Garmin watches):** done. Verified on the
+  Instinct 2 both as a native foot pod and through the ExtraSensor data field;
+  the data field is the recommended route (`docs/garmin.md`).
 - **Milestone 3 (profiles and web configuration):** done.
 
 ## License
