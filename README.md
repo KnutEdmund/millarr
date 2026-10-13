@@ -4,8 +4,10 @@
 
 millarr is a self-powered ESP32 sensor that measures the **actual belt movement**
 of a treadmill with an IR reflective sensor and a mark on the belt. It broadcasts
-the result over Bluetooth LE as a Running Speed and Cadence sensor, so a Garmin
-watch records the real belt speed in the activity.
+belt speed over Bluetooth LE as a foot pod, so a Garmin watch records the real
+belt speed in the activity. It sends speed only: the standard BLE profile has a
+cadence field, but millarr leaves it at 0 and cadence stays with the watch or
+heart-rate strap.
 
 ## Why
 
