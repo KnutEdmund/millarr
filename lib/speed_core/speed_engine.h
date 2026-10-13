@@ -17,10 +17,15 @@ class SpeedEngine {
   void reconfigure(const EngineConfig& cfg);
 
   // Feed one falling-edge timestamp (micros). Applies debounce and stop detection.
+  // With the max-speed filter on, a pulse is held back until no rival edge can
+  // follow it (min gap elapsed, via the next pulse or tick()); of two edges closer
+  // than the min gap, the one that fits the current speed is kept. A call commits
+  // at most one pulse to the log.
   void onPulse(uint32_t t_us);
 
-  // Called periodically (e.g. from loop()) so a long idle period is latched as
-  // stopped before a later micros() wrap could make running() resurrect.
+  // Called periodically (e.g. from loop()). Commits a held-back pulse once its
+  // min gap has elapsed, and latches a long idle period as stopped before a later
+  // micros() wrap could make running() resurrect. Commits at most one pulse.
   void tick(uint32_t now_us);
 
   bool running(uint32_t now_us) const;
@@ -41,6 +46,8 @@ class SpeedEngine {
   void startRun();
   void lockPhase();
   void pushRevolutionStats(float rev_speed);
+  void commit(uint32_t t);
+  uint32_t expectedIntervalUs() const;
 
   EngineConfig cfg_;
   PulseLog log_;
@@ -70,6 +77,8 @@ class SpeedEngine {
   uint32_t rejected_ = 0;
   uint32_t rejected_implausible_ = 0;
   uint32_t min_gap_us_ = 0;  // shortest mark distance / max speed; 0 = filter disabled
+  bool has_pending_ = false;  // a pulse held back until its min gap has elapsed
+  uint32_t pending_t_ = 0;
 };
 
 }  // namespace speed_core

@@ -624,10 +624,13 @@ void test_engine_rejects_implausible_speed() {
   SpeedEngine e(oneMarkConfig(8.0f));
   e.onPulse(1000000);
   e.onPulse(1066400);  // 66 ms later: 54 m/s on a 3.603 m belt (first-field-run artifact)
-  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(0, e.log().size());  // first pulse still held back
   TEST_ASSERT_EQUAL_UINT32(1, e.status(1066401).rejected_implausible);
   TEST_ASSERT_EQUAL_UINT32(0, e.status(1066401).rejected_debounce);
   e.onPulse(2261000);  // 1.261 s after the accepted pulse: 2.86 m/s
+  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1000000, e.log().at(0).t_us);  // no speed yet: the first edge wins
+  e.tick(2261000 + 450400);
   TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
   TEST_ASSERT_EQUAL_UINT32(1261000, e.log().at(1).interval_us);
   TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.857f, e.log().at(1).rev_speed_mps);
@@ -645,6 +648,7 @@ void test_engine_plausible_fast_pulse_passes() {
   SpeedEngine e(oneMarkConfig(8.0f));
   e.onPulse(1000000);
   e.onPulse(1456000);  // 7.9 m/s: below the 8 m/s ceiling
+  e.tick(1456000 + 450400);
   TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
   TEST_ASSERT_EQUAL_UINT32(0, e.status(1456001).rejected_implausible);
 }
@@ -655,8 +659,9 @@ void test_engine_implausible_uses_shortest_mark_distance() {
   SpeedEngine e(c);
   e.onPulse(1000000);
   e.onPulse(1070000);  // 70 ms: 7.1 m/s over the shortest mark, plausible
-  TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());
   e.onPulse(1130000);  // 60 ms: 8.3 m/s over the shortest mark, rejected
+  e.tick(1200000);
   TEST_ASSERT_EQUAL_UINT32(2, e.log().size());
   TEST_ASSERT_EQUAL_UINT32(1, e.status(1130001).rejected_implausible);
 }
@@ -667,6 +672,86 @@ void test_engine_reset_clears_implausible() {
   e.onPulse(1066400);
   e.reset();
   TEST_ASSERT_EQUAL_UINT32(0, e.status(1066401).rejected_implausible);
+}
+
+// --- Held-back pulses: of two edges closer than the min gap, keep the one that fits ---
+
+// One-mark belt at 3.6 m and 14.2 km/h, as in the 2026-10-13 field run.
+static std::vector<uint32_t> fieldRunPulses(double early_s, int glitch_at) {
+  SynthOptions o;
+  o.belt_length_m = 3.6;
+  o.marks = 1;
+  o.start_us = 1000000;
+  std::vector<uint32_t> p = synthConstant(14.2 / 3.6, 20.0, o);
+  const uint32_t spurious = p[glitch_at] - static_cast<uint32_t>(early_s * 1e6);
+  p.insert(p.begin() + glitch_at, spurious);
+  return p;
+}
+
+static void feedAndSettle(SpeedEngine& e, const std::vector<uint32_t>& p) {
+  for (uint32_t t : p) {
+    e.tick(t);  // as loop() does between pulses
+    e.onPulse(t);
+  }
+  e.tick(p.back() + 1000000);
+}
+
+void test_engine_early_spurious_edge_replaced_by_real_mark() {
+  // A spurious edge 0.27 s before the tape (session 38): before the fix one
+  // revolution read 20.8 km/h and the next 10.8 km/h.
+  std::vector<uint32_t> p = fieldRunPulses(0.27, 10);
+  SpeedEngine e(oneMarkConfig(8.0f));
+  feedAndSettle(e, p);
+  TEST_ASSERT_EQUAL_UINT32(p.size() - 1, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(1, e.status(p.back()).rejected_implausible);
+  for (size_t i = 1; i < e.log().size(); ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 14.2f / 3.6f, e.log().at(i).rev_speed_mps);
+  }
+  TEST_ASSERT_EQUAL_UINT32(p[11], e.log().at(10).t_us);  // the real mark, not the spurious edge
+}
+
+void test_engine_small_early_offset_also_replaced() {
+  std::vector<uint32_t> p = fieldRunPulses(0.09, 12);
+  SpeedEngine e(oneMarkConfig(8.0f));
+  feedAndSettle(e, p);
+  for (size_t i = 1; i < e.log().size(); ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 14.2f / 3.6f, e.log().at(i).rev_speed_mps);
+  }
+}
+
+void test_engine_late_spurious_edge_rejected() {
+  SynthOptions o;
+  o.belt_length_m = 3.6;
+  o.marks = 1;
+  o.start_us = 1000000;
+  std::vector<uint32_t> p = synthConstant(14.2 / 3.6, 20.0, o);
+  p.insert(p.begin() + 11, p[10] + 200000);  // 0.2 s after the real mark
+  SpeedEngine e(oneMarkConfig(8.0f));
+  feedAndSettle(e, p);
+  TEST_ASSERT_EQUAL_UINT32(p.size() - 1, e.log().size());
+  TEST_ASSERT_EQUAL_UINT32(p[10], e.log().at(10).t_us);
+  for (size_t i = 1; i < e.log().size(); ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 14.2f / 3.6f, e.log().at(i).rev_speed_mps);
+  }
+}
+
+void test_engine_held_pulse_commits_on_tick_after_min_gap() {
+  SpeedEngine e(oneMarkConfig(8.0f));  // min gap 3.603 / 8 = 450.4 ms
+  e.onPulse(1000000);
+  e.tick(1450000);
+  TEST_ASSERT_EQUAL_UINT32(0, e.log().size());
+  e.tick(1450400);
+  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());
+  e.tick(1450400);
+  TEST_ASSERT_EQUAL_UINT32(1, e.log().size());  // committed once
+}
+
+void test_engine_reset_drops_held_pulse() {
+  SpeedEngine e(oneMarkConfig(8.0f));
+  e.onPulse(1000000);
+  e.reset();
+  e.tick(2000000);
+  TEST_ASSERT_EQUAL_UINT32(0, e.log().size());
 }
 
 void test_stop_timeout_from_geometry() {
@@ -1014,6 +1099,11 @@ int main(int, char**) {
   RUN_TEST(test_engine_plausible_fast_pulse_passes);
   RUN_TEST(test_engine_implausible_uses_shortest_mark_distance);
   RUN_TEST(test_engine_reset_clears_implausible);
+  RUN_TEST(test_engine_early_spurious_edge_replaced_by_real_mark);
+  RUN_TEST(test_engine_small_early_offset_also_replaced);
+  RUN_TEST(test_engine_late_spurious_edge_rejected);
+  RUN_TEST(test_engine_held_pulse_commits_on_tick_after_min_gap);
+  RUN_TEST(test_engine_reset_drops_held_pulse);
   RUN_TEST(test_stop_timeout_from_geometry);
   RUN_TEST(test_stop_timeout_for_profile_uses_longest_mark);
   RUN_TEST(test_profile_slats_valid_and_belt_length);

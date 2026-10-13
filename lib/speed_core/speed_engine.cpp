@@ -22,6 +22,7 @@ void SpeedEngine::clampConfig() {
 }
 
 void SpeedEngine::reconfigure(const EngineConfig& cfg) {
+  has_pending_ = false;
   cfg_ = cfg;
   clampConfig();
   startRun();
@@ -81,19 +82,54 @@ void SpeedEngine::lockPhase() {
   ever_locked_ = true;
 }
 
+// Interval the next committed pulse should close at the current speed, or 0
+// when there is no speed yet to compare against.
+uint32_t SpeedEngine::expectedIntervalUs() const {
+  if (!has_last_ || run_count_ == 0 || !(last_rev_speed_ > 0.0f)) return 0;
+  const uint8_t slot = static_cast<uint8_t>(run_count_ % cfg_.marks_count);
+  return static_cast<uint32_t>(static_cast<double>(distanceForSlot(slot)) / last_rev_speed_ * 1e6);
+}
+
 void SpeedEngine::onPulse(uint32_t t) {
-  if (has_last_) {
-    uint32_t gap = t - last_t_;  // unsigned: correct across a single micros() wrap
+  if (has_pending_) {
+    const uint32_t gap = t - pending_t_;  // unsigned: correct across a single micros() wrap
     if (gap < cfg_.debounce_us) {
       ++rejected_;
       return;
     }
-    if (min_gap_us_ != 0 && gap < min_gap_us_) {
+    if (gap < min_gap_us_) {
+      // Two edges closer than any real mark pair: one is spurious (in the field,
+      // a reflection on the belt about a metre ahead of the tape). Keep the one
+      // whose interval fits the current speed; without a speed, the first wins.
       ++rejected_implausible_;
+      const uint32_t expected = expectedIntervalUs();
+      const uint32_t held = pending_t_ - last_t_;
+      if (expected != 0 && held <= cfg_.stop_timeout_us) {
+        const uint32_t cand = t - last_t_;
+        const uint32_t err_held = held > expected ? held - expected : expected - held;
+        const uint32_t err_cand = cand > expected ? cand - expected : expected - cand;
+        if (err_cand < err_held) pending_t_ = t;
+      }
       return;
     }
-    if (gap > cfg_.stop_timeout_us) startRun();
+    commit(pending_t_);
+    pending_t_ = t;  // still held: a rival edge may follow it
+    return;
   }
+  if (has_last_ && (t - last_t_) < cfg_.debounce_us) {
+    ++rejected_;
+    return;
+  }
+  if (min_gap_us_ == 0) {
+    commit(t);
+    return;
+  }
+  pending_t_ = t;
+  has_pending_ = true;
+}
+
+void SpeedEngine::commit(uint32_t t) {
+  if (has_last_ && (t - last_t_) > cfg_.stop_timeout_us) startRun();
 
   const uint8_t marks = cfg_.marks_count;
   const uint8_t slot = static_cast<uint8_t>(run_count_ % marks);
@@ -143,6 +179,10 @@ void SpeedEngine::onPulse(uint32_t t) {
 }
 
 void SpeedEngine::tick(uint32_t now_us) {
+  if (has_pending_ && (now_us - pending_t_) >= min_gap_us_) {
+    has_pending_ = false;
+    commit(pending_t_);
+  }
   if (has_last_ && (now_us - last_t_) > cfg_.stop_timeout_us) {
     has_last_ = false;
     startRun();  // zeroes last_rev_speed_, the revolution window and the phase
@@ -209,6 +249,7 @@ EngineStatus SpeedEngine::status(uint32_t now_us) const {
 
 void SpeedEngine::reset() {
   log_.clear();
+  has_pending_ = false;
   has_last_ = false;
   last_t_ = 0;
   next_seq_ = 1;

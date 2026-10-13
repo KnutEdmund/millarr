@@ -89,6 +89,7 @@ void loop() {
   flash_log::service(micros());
 
   engine.tick(micros());
+  flash_log::observe(engine.log());  // tick() may commit a held-back pulse
   watchBootButton();
 
   web_server::handle();
