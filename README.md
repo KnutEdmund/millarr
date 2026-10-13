@@ -111,6 +111,7 @@ If auto-detection picks the wrong port, pass it explicitly with
 | Path | What |
 |------|------|
 | `lib/speed_core/` | Pure C++ speed engine, log, profile model and formatters (unit-tested) |
+| `lib/dns_reply/` | Pure C++ captive-portal DNS reply builder (unit-tested) |
 | `src/` | Firmware: ISR, Wi-Fi AP, HTTP server, ADC probe, `src/profile_store.cpp` (profiles and Wi-Fi settings in NVS), `src/flash_log.cpp` (session files on LittleFS), `src/ble_rsc.cpp` (BLE foot pod via NimBLE) |
 | `web/index.html` | Diagnostic page, embedded into firmware at build time |
 | `web/settings.html` | Settings page: profile editor and Wi-Fi credentials, embedded at build time |

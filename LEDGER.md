@@ -10,6 +10,12 @@ Dated, append-only. Newest first.
   of a typed address. Only foreign hosts are redirected, so a wrong API path on the
   sensor still returns 404. The sign-in sheet cannot download files; the README
   points to a full browser for CSV downloads.
+- **Own DNS responder (`lib/dns_reply`), not the framework's `DNSServer`.** On the
+  bench the framework's server garbled every reply to a query with an EDNS record
+  (dig: "malformed message packet") and answered AAAA questions with an A record;
+  either can make a phone conclude "no internet" instead of "captive portal". The
+  responder answers A with the AP address, everything else with an empty NOERROR,
+  and never echoes additional records.
 
 ## 2026-10-13 (spurious edges)
 
