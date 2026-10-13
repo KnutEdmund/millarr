@@ -1,9 +1,21 @@
-# Treadmill Belt Speed Sensor
+# millarr
 
-A self-powered ESP32 sensor that measures **actual belt movement** on a treadmill
-with an IR reflective sensor and marks on the belt, and broadcasts it over
-Bluetooth LE as a Running Speed and Cadence sensor so a Garmin watch can record
-the real belt speed in the activity.
+**Treadmill belt speed sensor.** Measure the belt, not the console.
+
+millarr is a self-powered ESP32 sensor that measures the **actual belt movement**
+of a treadmill with an IR reflective sensor and a mark on the belt. It broadcasts
+the result over Bluetooth LE as a Running Speed and Cadence sensor, so a Garmin
+watch records the real belt speed in the activity.
+
+## Why
+
+A treadmill console shows the speed the motor is told to run, not the speed the
+belt actually moves. Calibration, belt length and slat geometry all shift the two
+apart, and the watch's own pace on a treadmill is an estimate from arm and foot
+motion. millarr gives an independent measurement: every belt revolution is timed,
+recorded and available for analysis afterwards.
+
+## What it does
 
 The device timestamps every mark pulse to the microsecond, computes revolution-based
 speed with per-mark distance correction, hosts its own Wi-Fi access point, and serves
@@ -13,6 +25,11 @@ captured without a browser connected. Per-treadmill profiles (name, mark count,
 measured mark distances, or slat count and pitch for slat belts) and the Wi-Fi
 access point credentials are configured from a **Settings** page and persisted in
 NVS across power cycles.
+
+**Status:** under active development (`v0.1.0`). Verified on one slat treadmill
+with a Garmin Instinct 2. Precision and repeatability are established in field
+runs; absolute accuracy depends on the belt length entered in the profile and is
+still being validated against an independent measurement.
 
 ## Hardware
 
@@ -33,14 +50,20 @@ Requires [PlatformIO Core](https://platformio.org/) (`brew install platformio`).
 ```bash
 pio test -e native            # unit tests for the speed engine, on your computer
 pio run -e esp32dev           # build firmware
-pio run -e esp32dev -t upload # flash (port is set in platformio.ini)
+pio run -e esp32dev -t upload # flash (port is auto-detected)
 pio device monitor            # serial status line, 115200 baud
 ```
+
+If auto-detection picks the wrong port, pass it explicitly with
+`--upload-port /dev/cu.usbserial-XXXX` (and `--port` for the monitor), or set
+`PLATFORMIO_UPLOAD_PORT` in your shell.
 
 ## Use
 
 1. Power the sensor. It starts a Wi-Fi network `treadmill-sensor` (password in
-   `include/config.h`, change it).
+   `include/config.h`, change it under **Settings**). The web interface is plain
+   HTTP on the sensor's own access point, with no login; anyone who knows the
+   Wi-Fi password can change settings.
 2. Connect a phone or laptop to that network and open `http://192.168.4.1/` (or
    `http://treadmill.local/`) **with the `http://` prefix typed explicitly** — phone
    browsers otherwise try to upgrade the address to HTTPS, which the sensor does not
@@ -85,4 +108,4 @@ pio device monitor            # serial status line, 115200 baud
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).
