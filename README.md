@@ -1,5 +1,7 @@
 # millarr
 
+[![CI](https://github.com/KnutEdmund/millarr/actions/workflows/ci.yml/badge.svg)](https://github.com/KnutEdmund/millarr/actions/workflows/ci.yml)
+
 **Treadmill belt speed sensor.** Measure the belt, not the console.
 
 ![millarr: optical belt sensor, live web dashboard, and measured belt speed next to the watch's estimated pace in Garmin Connect](docs/images/millarr-overview.jpg)
