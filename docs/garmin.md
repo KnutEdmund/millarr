@@ -20,6 +20,16 @@ The data field route was chosen on 2026-09-29 (`LEDGER.md`). It keeps every metr
 from the strap and adds the belt speed next to them. The pace shown in Garmin
 Connect stays the strap's estimate; the belt speed is the extra curve.
 
+What that looks like for an 8 × 2 min interval session recorded through the data
+field (2026-10-13): the watch's pace wanders within each interval, while the
+developer field shows the belt's actual speed steps. The brief spikes above
+20 km/h in the speed chart are mark-timing glitches at high speed, known and
+under investigation.
+
+![Garmin Connect pace chart, estimated by the watch and HRM 600](images/garmin-pace-estimated.png)
+
+![Garmin Connect speed chart, measured by millarr through the data field](images/garmin-speed-measured.png)
+
 ### Data field setup (ExtraSensor, Connect IQ store)
 
 ExtraSensor (closed source, free) connects to BLE running speed sensors from inside

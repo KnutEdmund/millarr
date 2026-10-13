@@ -6,3 +6,5 @@ src/fw_version.h
 __pycache__/
 .DS_Store
 .superpowers/
+# Raw screenshots and drafts; published copies go in docs/images/
+/images/
