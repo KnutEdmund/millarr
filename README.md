@@ -80,10 +80,12 @@ If auto-detection picks the wrong port, pass it explicitly with
    `include/config.h`, change it under **Settings**). The web interface is plain
    HTTP on the sensor's own access point, with no login; anyone who knows the
    Wi-Fi password can change settings.
-2. Connect a phone or laptop to that network and open `http://192.168.4.1/` (or
-   `http://treadmill.local/`) **with the `http://` prefix typed explicitly** — phone
-   browsers otherwise try to upgrade the address to HTTPS, which the sensor does not
-   serve.
+2. Connect a phone or laptop to that network. The sensor acts as a captive
+   portal, so the phone's network sign-in sheet opens the dashboard by itself. To
+   open it in a full browser (needed for CSV downloads on a phone), go to
+   `http://192.168.4.1/` (or `http://treadmill.local/`) **with the `http://`
+   prefix typed explicitly**; browsers otherwise try HTTPS, which the sensor does
+   not serve.
 3. Open **Settings** to create a profile per treadmill — up to 20 — with a name,
    optional notes (location, model, quirks), marks, and the measured distance
    between marks; a "+ New profile" button on both pages jumps straight to a blank

@@ -6,7 +6,9 @@ placement or firmware timing. Record results in `docs/results/` (create it) as
 
 ## 1. Bench
 
-1. Flash firmware, open `http://192.168.4.1/`.
+1. Flash firmware and join the sensor's network with a phone. The sign-in sheet
+   should open the dashboard by itself (captive portal); if it does not, open
+   `http://192.168.4.1/`.
 2. Move a white card past the sensor by hand ten times. Expect ten pulses, zero
    dropped, and rejected only from bounces.
 3. Capture signal with the card held still on white and on black. Expect a margin of

@@ -2,6 +2,15 @@
 
 Dated, append-only. Newest first.
 
+## 2026-10-13 (captive portal)
+
+- **The access point is a captive portal: wildcard DNS plus a 302 to the dashboard
+  for any foreign `Host`.** Phones probing for internet then open the dashboard in
+  their sign-in sheet over plain HTTP, which sidesteps the browsers' HTTPS upgrade
+  of a typed address. Only foreign hosts are redirected, so a wrong API path on the
+  sensor still returns 404. The sign-in sheet cannot download files; the README
+  points to a full browser for CSV downloads.
+
 ## 2026-10-13 (spurious edges)
 
 - **Of two edges closer than the minimum gap, the engine keeps the one that fits the

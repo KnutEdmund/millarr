@@ -2,6 +2,11 @@
 
 Base URL: `http://192.168.4.1` (or `http://treadmill.local`) on the sensor's access point.
 
+The access point answers every DNS query with its own address (captive portal).
+A request whose `Host` is neither the sensor's IP nor `treadmill.local`, such as an
+OS connectivity probe, gets `302` to `http://192.168.4.1/`; unknown paths on the
+sensor itself get `404`.
+
 | Method | Path | Response |
 |--------|------|----------|
 | GET | `/` | Diagnostic page |
