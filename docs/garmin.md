@@ -146,8 +146,7 @@ ble: disconnect peer=cb:93:e0:78:75:26 reason=531 enc=0 bonded=0
 - **The stored `millarr` shows Searching** while the serial line shows connected and
   notifications flowing: the watch's sensor layer is stuck. **Restart the watch.**
   Nothing on the sensor side fixes this; five identical connections were rejected on
-  2026-09-28 until the watch was restarted, then it connected on its own
-  (`docs/results/2026-09-28-garmin-instinct-2.md`).
+  2026-09-28 until the watch was restarted, then it connected on its own.
 - **Disconnect reason 531** (0x213) means the watch hung up; it is normal when the
   watch leaves the sensor menu. **enc=0 bonded=0** is also normal: the Instinct 2 does
   not pair with the pod.

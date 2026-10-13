@@ -55,7 +55,7 @@ translates exactly with the chain. A tape on top of the deck, or a string around
 the outside of the loop, follows the slat **tops**, which swing around the end drums
 on a larger radius than the neutral line. That path is longer by 2π·h, where h is
 the height from the neutral line to the slat surface: about 10 cm for h ≈ 16 mm, a
-+2.8 % speed error on a 3.6 m belt (`docs/results/2026-09-26-first-field-run.md`).
++2.8 % speed error on a 3.6 m belt (seen on the first field run, 2026-09-26).
 **Do not measure a slat belt with a tape or a string around the loop.**
 
 Measure it on the top side only, with no assumptions about the ends:

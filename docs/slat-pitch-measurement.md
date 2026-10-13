@@ -74,11 +74,11 @@ the one to repeat first.
 
 `belt_length_m = slat_count × slat_pitch_m`
 
-For the slat treadmill, the numbers on the table before this measurement:
+For the slat treadmill used in the field runs, the numbers on the table before this measurement:
 
 | L | Meaning |
 |---|---|
-| 3.504 m | console honest (`docs/results/2026-09-28-session-012.md`) |
+| 3.504 m | console honest (session 12, 2026-09-28) |
 | 3.603 m | 60 × 6.0 cm, the value in use on 2026-09-26 |
 | 3.740 m | string around the outside, 2026-09-28; not a calibration value |
 
@@ -86,7 +86,7 @@ Any L is fine as a result. The point is that L is now measured, not argued.
 
 ## Step 5: enter it on the device
 
-1. Open the Settings page, select the profile (profile 2 "slat treadmill").
+1. Open the Settings page, select the slat treadmill's profile.
 2. Set **Type** to `Slats (count × pitch)`.
 3. Enter **Slat count** and **Slat pitch (m, mid-flat)**. The page shows the
    resulting belt length as `count × pitch`; check it against your arithmetic.
