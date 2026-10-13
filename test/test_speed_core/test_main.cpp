@@ -9,6 +9,7 @@
 #include "speed_types.h"
 #include "synth.h"
 #include "format.h"
+#include "dns_reply.h"
 #include "profile.h"
 #include "csv_batcher.h"
 #include "session.h"
@@ -1052,6 +1053,79 @@ void test_rsc_encode_cadence_passthrough() {
   TEST_ASSERT_EQUAL_UINT8(0xAA, out[3]);
 }
 
+// --- Captive-portal DNS replies ---
+
+static const uint8_t kApIp[4] = {192, 168, 4, 1};
+
+// Standard query for captive.apple.com with the given type; `edns` appends an
+// OPT record (ARCOUNT 1), as Android and dig send.
+static std::vector<uint8_t> dnsQuery(uint16_t qtype, bool edns) {
+  std::vector<uint8_t> q = {0xAB, 0xCD, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, static_cast<uint8_t>(edns ? 1 : 0)};
+  const char* labels[] = {"captive", "apple", "com"};
+  for (const char* l : labels) {
+    q.push_back(static_cast<uint8_t>(std::strlen(l)));
+    q.insert(q.end(), l, l + std::strlen(l));
+  }
+  q.push_back(0);
+  q.push_back(qtype >> 8); q.push_back(qtype & 0xFF);
+  q.push_back(0); q.push_back(1);
+  if (edns) {
+    const uint8_t opt[] = {0, 0, 41, 0x10, 0, 0, 0, 0, 0, 0, 0};
+    q.insert(q.end(), opt, opt + sizeof opt);
+  }
+  return q;
+}
+
+void test_dns_a_query_answers_ap_ip() {
+  std::vector<uint8_t> q = dnsQuery(1, false);
+  uint8_t out[dns_reply::kMaxPacket];
+  const size_t n = dns_reply::build(q.data(), q.size(), kApIp, out, sizeof out);
+  TEST_ASSERT_EQUAL_UINT32(q.size() + 16, n);
+  TEST_ASSERT_EQUAL_HEX8(0xAB, out[0]);
+  TEST_ASSERT_EQUAL_HEX8(0x85, out[2]);  // QR, AA, RD copied
+  TEST_ASSERT_EQUAL_HEX8(0x00, out[3]);  // NOERROR
+  TEST_ASSERT_EQUAL_UINT8(1, out[7]);    // one answer
+  TEST_ASSERT_EQUAL_UINT8(0, out[11]);   // no additional records
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(q.data() + 12, out + 12, q.size() - 12);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(kApIp, out + n - 4, 4);
+}
+
+void test_dns_edns_query_answers_without_opt() {
+  std::vector<uint8_t> q = dnsQuery(1, true);
+  uint8_t out[dns_reply::kMaxPacket];
+  const size_t n = dns_reply::build(q.data(), q.size(), kApIp, out, sizeof out);
+  TEST_ASSERT_EQUAL_UINT32(q.size() - 11 + 16, n);  // OPT not echoed
+  TEST_ASSERT_EQUAL_UINT8(1, out[7]);
+  TEST_ASSERT_EQUAL_UINT8(0, out[11]);
+  TEST_ASSERT_EQUAL_UINT8_ARRAY(kApIp, out + n - 4, 4);
+}
+
+void test_dns_aaaa_query_gets_empty_noerror() {
+  std::vector<uint8_t> q = dnsQuery(28, true);
+  uint8_t out[dns_reply::kMaxPacket];
+  const size_t n = dns_reply::build(q.data(), q.size(), kApIp, out, sizeof out);
+  TEST_ASSERT_EQUAL_UINT32(q.size() - 11, n);
+  TEST_ASSERT_EQUAL_HEX8(0x00, out[3]);
+  TEST_ASSERT_EQUAL_UINT8(0, out[7]);
+}
+
+void test_dns_rejects_malformed() {
+  uint8_t out[dns_reply::kMaxPacket];
+  std::vector<uint8_t> q = dnsQuery(1, false);
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(q.data(), 11, kApIp, out, sizeof out));       // short header
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(q.data(), q.size() - 2, kApIp, out, sizeof out));  // cut question
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(q.data(), q.size(), kApIp, out, 20));          // no room
+  std::vector<uint8_t> r = q;
+  r[2] |= 0x80;  // a response, not a query
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(r.data(), r.size(), kApIp, out, sizeof out));
+  r = q;
+  r[5] = 2;  // two questions
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(r.data(), r.size(), kApIp, out, sizeof out));
+  r = q;
+  r[12] = 0xC0;  // compression pointer in a query
+  TEST_ASSERT_EQUAL_UINT32(0, dns_reply::build(r.data(), r.size(), kApIp, out, sizeof out));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_log_starts_empty);
@@ -1104,6 +1178,10 @@ int main(int, char**) {
   RUN_TEST(test_engine_late_spurious_edge_rejected);
   RUN_TEST(test_engine_held_pulse_commits_on_tick_after_min_gap);
   RUN_TEST(test_engine_reset_drops_held_pulse);
+  RUN_TEST(test_dns_a_query_answers_ap_ip);
+  RUN_TEST(test_dns_edns_query_answers_without_opt);
+  RUN_TEST(test_dns_aaaa_query_gets_empty_noerror);
+  RUN_TEST(test_dns_rejects_malformed);
   RUN_TEST(test_stop_timeout_from_geometry);
   RUN_TEST(test_stop_timeout_for_profile_uses_longest_mark);
   RUN_TEST(test_profile_slats_valid_and_belt_length);
