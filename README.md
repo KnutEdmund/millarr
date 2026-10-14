@@ -3,7 +3,7 @@
 [![CI](https://github.com/KnutEdmund/millarr/actions/workflows/ci.yml/badge.svg)](https://github.com/KnutEdmund/millarr/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/KnutEdmund/millarr/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/KnutEdmund/millarr/actions/workflows/github-code-scanning/codeql)
 [![Release](https://img.shields.io/github/v/release/KnutEdmund/millarr)](https://github.com/KnutEdmund/millarr/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/KnutEdmund/millarr)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/KnutEdmund/millarr?v=1)](LICENSE)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 
 **Treadmill belt speed sensor.** Measure the belt, not the console.
