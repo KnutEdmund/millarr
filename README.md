@@ -125,6 +125,22 @@ If auto-detection picks the wrong port, pass it explicitly with
   the data field is the recommended route (`docs/garmin.md`).
 - **Milestone 3 (profiles and web configuration):** done.
 
+## Related projects
+
+Earlier DIY treadmill sensors that cover similar ground:
+
+- [Make a smart treadmill for Zwift running with $5](https://hackaday.io/project/167402-make-a-smart-treadmill-for-zwift-running-with-5)
+  (Hackaday.io): an optical sensor on the belt that reports speed to Zwift over BLE.
+- [lefty01/ESP32_TTGO_FTMS](https://github.com/lefty01/ESP32_TTGO_FTMS):
+  an ESP32 speed and incline sensor exposed as a BLE FTMS treadmill, with a web
+  interface for setup.
+- [imwitti/FootpodMimic](https://github.com/imwitti/FootpodMimic): uses a speed
+  sensor to measure treadmill speed and send it to Zwift over BLE.
+
+millarr differs in what it is for. It times marks on the belt itself to get a
+speed you can check against the console. It reports through RSC to Garmin
+watches, and it keeps a pulse log of each session for later analysis.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
