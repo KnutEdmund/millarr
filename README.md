@@ -21,7 +21,7 @@ diagnostics, treadmill profiles, and session logging.
 
 *Same workout, two sources: the watch and strap estimate the pace, millarr
 measures the belt. Recorded on an Instinct 2 through the Connect IQ data field;
-full-size charts in `docs/garmin.md`.*
+full-size charts in [`docs/garmin.md`](docs/garmin.md).*
 
 The sensor is self-powered and reads a mark on the belt, so it measures the
 **actual belt movement** rather than the console's setpoint. Over Bluetooth LE it
@@ -36,7 +36,7 @@ measured belt speed, and calibration drifts from machine to machine. The watch's
 own pace on a treadmill is an estimate from arm and foot motion. millarr gives an
 independent measurement: every belt revolution is timed, recorded and available
 for analysis afterwards. The charts above come from one such session; the
-full-size versions and how to set up the recording are in `docs/garmin.md`.
+full-size versions and how to set up the recording are in [`docs/garmin.md`](docs/garmin.md).
 
 ## What it does
 
@@ -64,7 +64,7 @@ still being validated against an independent measurement.
   Slat belts work the same way; their length is entered as slat count × pitch,
   never measured with a tape
 
-See `docs/hardware.md` for wiring and belt marking.
+See [`docs/hardware.md`](docs/hardware.md) for wiring and belt marking.
 
 ## Build and flash
 
@@ -99,8 +99,8 @@ If auto-detection picks the wrong port, pass it explicitly with
    profile form. Also change the sensor's Wi-Fi name and password here. The active
    profile survives power cycles. Settings also lets you download all profiles as
    a JSON backup and restore them onto the same or another sensor.
-4. Follow `docs/test-protocol.md` to verify the sensor before trusting the numbers.
-5. Get the belt speed onto a Garmin watch (`docs/garmin.md`). Two routes:
+4. Follow [`docs/test-protocol.md`](docs/test-protocol.md) to verify the sensor before trusting the numbers.
+5. Get the belt speed onto a Garmin watch ([`docs/garmin.md`](docs/garmin.md)). Two routes:
    - **Connect IQ data field (recommended):** install ExtraSensor from the
      Connect IQ store and let it connect to the sensor from inside the activity.
      Belt speed is recorded as a developer field next to the watch's own pace,
@@ -129,7 +129,7 @@ If auto-detection picks the wrong port, pass it explicitly with
 
 - **Milestone 2 (BLE RSC foot pod for Garmin watches):** done. Verified on the
   Instinct 2 both as a native foot pod and through the ExtraSensor data field;
-  the data field is the recommended route (`docs/garmin.md`).
+  the data field is the recommended route ([`docs/garmin.md`](docs/garmin.md)).
 - **Milestone 3 (profiles and web configuration):** done.
 
 ## Related projects
