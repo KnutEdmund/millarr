@@ -17,10 +17,11 @@ running data in Garmin Connect.
 The project includes a local web interface for calibration, real-time
 diagnostics, treadmill profiles, and session logging.
 
-![millarr: optical belt sensor, live web dashboard, and measured belt speed next to the watch's estimated pace in Garmin Connect](docs/images/millarr-overview.jpg)
+![One session, two data sources: Garmin's estimated pace above, millarr's measured belt speed below, from the same interval workout in Garmin Connect](docs/images/millarr-overview.jpg)
 
-*Concept illustration. The values in it are not measurements; the Garmin charts
-below are real data from a field run.*
+*Real data from one interval workout in Garmin Connect: the watch's estimated
+pace above, millarr's measured belt speed below. The short speed spikes are
+measurement artifacts under investigation.*
 
 The sensor is self-powered and reads a mark on the belt, so it measures the
 **actual belt movement** rather than the console's setpoint. Over Bluetooth LE it
@@ -34,14 +35,8 @@ A treadmill console may report the commanded speed rather than an independently
 measured belt speed, and calibration drifts from machine to machine. The watch's
 own pace on a treadmill is an estimate from arm and foot motion. millarr gives an
 independent measurement: every belt revolution is timed, recorded and available
-for analysis afterwards.
-
-The same interval session in Garmin Connect, as the watch estimated it and as
-millarr measured it:
-
-| Pace, estimated by the watch and strap | Speed, measured by millarr |
-|---|---|
-| ![Garmin Connect pace chart: estimated pace drifts within each interval and between them](docs/images/garmin-pace-estimated.png) | ![Garmin Connect speed chart: flat, repeatable belt speed steps per interval](docs/images/garmin-speed-measured.png) |
+for analysis afterwards. The charts above come from one such session; the
+full-size versions and how to set up the recording are in `docs/garmin.md`.
 
 ## What it does
 
