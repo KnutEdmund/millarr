@@ -6,19 +6,27 @@
 [![License: MIT](https://img.shields.io/github/license/KnutEdmund/millarr?v=1)](LICENSE)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 
-**Treadmill belt speed sensor.** Measure the belt, not the console.
+**ESP32-based treadmill belt speed sensor**
+
+millarr independently measures treadmill belt speed using an infrared reflective
+sensor.
+
+Measurements are transmitted over Bluetooth LE and can be recorded alongside
+running data in Garmin Connect.
+
+The project includes a local web interface for calibration, real-time
+diagnostics, treadmill profiles, and session logging.
 
 ![millarr: optical belt sensor, live web dashboard, and measured belt speed next to the watch's estimated pace in Garmin Connect](docs/images/millarr-overview.jpg)
 
 *Concept illustration. The values in it are not measurements; the Garmin charts
 below are real data from a field run.*
 
-millarr is a self-powered ESP32 sensor that measures the **actual belt movement**
-of a treadmill with an IR reflective sensor and a mark on the belt. It broadcasts
-belt speed over Bluetooth LE as a foot pod, so a Garmin watch records the real
-belt speed in the activity. It sends speed only: the standard BLE profile has a
-cadence field, but millarr leaves it at 0 and cadence stays with the watch or
-heart-rate strap.
+The sensor is self-powered and reads a mark on the belt, so it measures the
+**actual belt movement** rather than the console's setpoint. Over Bluetooth LE it
+appears as a foot pod and sends speed only: the standard profile has a cadence
+field, but millarr leaves it at 0 and cadence stays with the watch or heart-rate
+strap.
 
 ## Why
 
