@@ -19,9 +19,9 @@ diagnostics, treadmill profiles, and session logging.
 
 ![One session, two data sources: Garmin's estimated pace above, millarr's measured belt speed below, from the same interval workout in Garmin Connect](docs/images/millarr-overview.jpg)
 
-*Real data from one interval workout in Garmin Connect: the watch's estimated
-pace above, millarr's measured belt speed below. The short speed spikes are
-measurement artifacts under investigation.*
+*Same workout, two sources: the watch and strap estimate the pace, millarr
+measures the belt. Recorded on an Instinct 2 through the Connect IQ data field;
+full-size charts in `docs/garmin.md`.*
 
 The sensor is self-powered and reads a mark on the belt, so it measures the
 **actual belt movement** rather than the console's setpoint. Over Bluetooth LE it
